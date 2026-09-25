@@ -22,6 +22,7 @@ from openai import (
 from openai.types.responses import Response
 
 from core.errores import (
+    ErrorLimiteHerramientas,
     ErrorRespuestaASTRO,
     crear_registro_error,
     guardar_registro_error,
@@ -52,6 +53,7 @@ class Configuracion:
     nivel_servicio: str
     timeout_segundos: float
     reintentos: int
+    pasos_herramienta_maximos: int
     tokens_salida_maximos: int
     turnos_historial_maximos: int
     tarifas: Tarifas
@@ -76,6 +78,10 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     if not isinstance(api, dict):
         raise ValueError("Falta la sección 'api' en config/config.yaml")
 
+    agente = datos.get("agente")
+    if not isinstance(agente, dict):
+        raise ValueError("Falta la sección 'agente' en config/config.yaml")
+
     precios = datos.get("precios_usd_por_millon")
     if not isinstance(precios, dict):
         raise ValueError(
@@ -90,6 +96,9 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     turnos = limites.get("turnos_historial_maximos")
     timeout_segundos = api.get("timeout_segundos")
     reintentos = api.get("reintentos")
+    pasos_herramienta_maximos = agente.get(
+        "pasos_herramienta_maximos"
+    )
 
     for nombre, valor in {
         "modelo": modelo,
@@ -130,6 +139,14 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     if type(reintentos) is not int or not 0 <= reintentos <= 5:
         raise ValueError("'reintentos' debe ser un entero entre 0 y 5")
 
+    if (
+        type(pasos_herramienta_maximos) is not int
+        or not 1 <= pasos_herramienta_maximos <= 10
+    ):
+        raise ValueError(
+            "'pasos_herramienta_maximos' debe ser un entero entre 1 y 10"
+        )
+
     valores_precios = {
         "entrada": precios.get("entrada"),
         "entrada_cache": precios.get("entrada_cache"),
@@ -151,6 +168,7 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
         nivel_servicio=nivel_servicio,
         timeout_segundos=float(timeout_segundos),
         reintentos=reintentos,
+        pasos_herramienta_maximos=pasos_herramienta_maximos,
         tokens_salida_maximos=tokens,
         turnos_historial_maximos=turnos,
         tarifas=Tarifas(
@@ -201,6 +219,11 @@ def es_error_reintentable(error: Exception) -> bool:
 
 
 def explicar_error(error: Exception) -> str:
+    if isinstance(error, ErrorLimiteHerramientas):
+        return (
+            "La tarea necesitó más pasos de herramientas de los permitidos. "
+            "La detuve para evitar un bucle o gasto inesperado."
+        )
     if isinstance(error, ErrorRespuestaASTRO):
         return (
             "La respuesta se interrumpió antes de terminar. "
@@ -312,85 +335,81 @@ def responder(
     )
     limite_mensajes = configuracion.turnos_historial_maximos * 2 - 1
     historial_limitado = historial[-limite_mensajes:]
-    respuesta, texto_inicial, registro_inicial = ejecutar_stream(
-        cliente,
-        configuracion,
-        registro,
-        instrucciones,
-        historial_limitado,
-    )
-    llamadas = [
-        elemento
-        for elemento in respuesta.output
-        if elemento.type == "function_call"
-    ]
+    entrada_actual: list = [*historial_limitado]
+    fragmentos_totales: list[str] = []
+    registros: list[RegistroUso] = []
+    pasos_herramienta = 0
 
-    if not llamadas:
-        print()
-        return ResultadoRespuesta(
-            texto=texto_inicial,
-            registros=(registro_inicial,),
+    while True:
+        respuesta, texto, registro_uso = ejecutar_stream(
+            cliente,
+            configuracion,
+            registro,
+            instrucciones,
+            entrada_actual,
         )
+        fragmentos_totales.append(texto)
+        registros.append(registro_uso)
+        llamadas = [
+            elemento
+            for elemento in respuesta.output
+            if elemento.type == "function_call"
+        ]
 
-    if len(llamadas) != 1:
-        print()
-        raise ErrorRespuestaASTRO()
+        if not llamadas:
+            print()
+            return ResultadoRespuesta(
+                texto="".join(fragmentos_totales),
+                registros=tuple(registros),
+            )
 
-    llamada = llamadas[0]
-    try:
-        argumentos = json.loads(llamada.arguments)
-    except json.JSONDecodeError as error:
-        print()
-        raise ErrorRespuestaASTRO() from error
+        if len(llamadas) != 1:
+            print()
+            raise ErrorRespuestaASTRO()
 
-    if not isinstance(argumentos, dict):
-        print()
-        raise ErrorRespuestaASTRO()
+        if (
+            pasos_herramienta
+            >= configuracion.pasos_herramienta_maximos
+        ):
+            print()
+            raise ErrorLimiteHerramientas()
 
-    contexto = ContextoHerramienta(
-        zona_horaria=configuracion.zona_horaria
-    )
-    try:
-        resultado_herramienta = registro.ejecutar(
-            llamada.name,
-            argumentos,
-            contexto,
+        llamada = llamadas[0]
+        try:
+            argumentos = json.loads(llamada.arguments)
+        except json.JSONDecodeError as error:
+            print()
+            raise ErrorRespuestaASTRO() from error
+
+        if not isinstance(argumentos, dict):
+            print()
+            raise ErrorRespuestaASTRO()
+
+        contexto = ContextoHerramienta(
+            zona_horaria=configuracion.zona_horaria
         )
-    except ErrorHerramienta as error:
-        print()
-        raise ErrorRespuestaASTRO() from error
-    entrada_continuacion = [
-        *historial_limitado,
-        *respuesta.output,
-        {
-            "type": "function_call_output",
-            "call_id": llamada.call_id,
-            "output": json.dumps(
-                resultado_herramienta,
-                ensure_ascii=False,
-            ),
-        },
-    ]
-    respuesta_final, texto_final, registro_final = ejecutar_stream(
-        cliente,
-        configuracion,
-        registro,
-        instrucciones,
-        entrada_continuacion,
-    )
+        try:
+            resultado_herramienta = registro.ejecutar(
+                llamada.name,
+                argumentos,
+                contexto,
+            )
+        except ErrorHerramienta as error:
+            print()
+            raise ErrorRespuestaASTRO() from error
 
-    if any(
-        elemento.type == "function_call"
-        for elemento in respuesta_final.output
-    ):
-        print()
-        raise ErrorRespuestaASTRO()
-
-    print()
-    return ResultadoRespuesta(
-        texto=texto_inicial + texto_final,
-        registros=(registro_inicial, registro_final),
-    )
+        entrada_actual.extend(respuesta.output)
+        entrada_actual.append(
+            {
+                "type": "function_call_output",
+                "call_id": llamada.call_id,
+                "output": json.dumps(
+                    resultado_herramienta,
+                    ensure_ascii=False,
+                ),
+            }
+        )
+        pasos_herramienta += 1
 
 
 def main() -> None:

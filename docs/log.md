@@ -139,3 +139,9 @@ Formato:
 - Falló: No hubo fallos de implementación ni de prueba. La captura de PowerShell mostró algunas tildes incorrectamente, sin afectar a los archivos UTF-8 ni a las comprobaciones.
 - Decidido: Añadir una herramienta requiere un único archivo que exporte `HERRAMIENTA`; el núcleo y el registro no se editan. Los riesgos disponibles son bajo, medio y alto. Por ahora son metadatos; las reglas de autorización `AUTO`, `ASK` y `DENY` pertenecen a la fase 53.
 - Siguiente: fase 21 — Bucle de agente.
+
+## 2026-09-25 · Fase 21 — Bucle de agente
+- Hecho: `core/chat.py` ahora mantiene dentro de cada turno una entrada de trabajo acumulada y alterna entre el modelo y el registro hasta recibir una respuesta sin nuevas llamadas. Conserva el texto y el uso de todas las peticiones y ejecuta las herramientas de una en una. Se añadió `agente.pasos_herramienta_maximos: 5` a la configuración y un error específico que detiene la tarea antes de superar el límite. Una simulación encadenó fecha, suma y multiplicación, produjo cuatro registros y validó la protección con límite 2. La prueba real resolvió sola tres pasos: obtuvo el año 2026, calculó 2036 y después 4072 mediante dos llamadas separadas a la calculadora.
+- Falló: La primera inspección de la simulación conservó referencias a una lista mutable y no pudo distinguir los estados intermedios; se corrigió el cliente falso para copiar cada petición al recibirla. No era un fallo del bucle real. La captura de PowerShell representó incorrectamente algunas tildes y el signo de multiplicación, sin afectar a los datos ni a los resultados.
+- Decidido: El agente ejecuta una herramienta cada vez y acumula todos los resultados del turno. El límite inicial es 5 ejecuciones, configurable entre 1 y 10; después de la última ejecución permitida puede realizar una petición final de redacción, pero no otra herramienta.
+- Siguiente: fase 22 — Primeras pruebas automáticas del núcleo.

@@ -10,6 +10,10 @@ class ErrorRespuestaASTRO(Exception):
     """Error controlado durante una respuesta en streaming."""
 
 
+class ErrorLimiteHerramientas(ErrorRespuestaASTRO):
+    """El agente alcanzó el máximo de herramientas de un turno."""
+
+
 @dataclass(frozen=True)
 class RegistroError:
     fecha_hora: str

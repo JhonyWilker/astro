@@ -7,6 +7,9 @@ api:
   timeout_segundos: 30
   reintentos: 2
 
+agente:
+  pasos_herramienta_maximos: 5
+
 limites:
   tokens_salida_maximos: 2000
   turnos_historial_maximos: 20

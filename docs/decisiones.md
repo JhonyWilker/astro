@@ -80,3 +80,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Cada archivo de herramienta exportará una ficha `HERRAMIENTA` con nombre, descripción, parámetros, riesgo y ejecutor; un registro la descubrirá automáticamente al arrancar.
 - Motivo: Mantener el cerebro independiente de herramientas concretas y convertir cada incorporación en un cambio localizado y verificable.
 - Consecuencia: Un archivo de herramienta incompleto o un nombre duplicado impiden el arranque con un error claro. Los niveles bajo, medio y alto quedan disponibles como metadatos, pero su política de autorización se implementará en la fase 53.
+
+## 2026-09-25 · Bucle de agente secuencial y acotado
+
+- Contexto: Resolver tareas dependientes requiere que el modelo observe el resultado de una herramienta antes de elegir la siguiente, pero un bucle sin límite puede disparar coste o no terminar.
+- Decisión: Mantener una entrada de trabajo acumulada, ejecutar herramientas secuencialmente y limitar cada turno a 5 ejecuciones configurables.
+- Motivo: Permitir planes de varios pasos con resultados dependientes, conservando orden, trazabilidad y un tope de seguridad.
+- Consecuencia: Cada vuelta a la API tiene su propio registro de uso. Tras alcanzar el límite se permite únicamente la respuesta final; si el modelo solicita otra herramienta, ASTRO detiene el turno con un mensaje controlado.
