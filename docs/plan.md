@@ -153,7 +153,7 @@ Objetivo: el núcleo de ASTRO conversa por texto con personalidad propia, usa he
 | 19 | ✅ Segunda herramienta: calculadora | Cálculos exactos |
 | 20 | ✅ Registro genérico de herramientas: nombre, descripción, parámetros, riesgo | Añadir una herramienta = un archivo |
 | 21 | ✅ Bucle de agente: el modelo encadena varias herramientas | Tarea de 3 pasos resuelta sola |
-| 22 | Primeras pruebas automáticas (pytest) del núcleo | 10 pruebas pasan |
+| 22 | ✅ Primeras pruebas automáticas (pytest) del núcleo | 10 pruebas pasan |
 | 22a | Núcleo desplegado en el VPS con FastAPI + WebSocket | Terminal y navegador hablan con el mismo ASTRO |
 | 22b | Tailscale en el VPS, el PC y el iPhone | ASTRO responde desde el iPhone fuera de casa sin abrir puertos |
 | 22c | App web propia (PWA): chat de texto con ASTRO, sin Telegram ni apps de terceros | Instalada en la pantalla de inicio del iPhone, conversación completa |
@@ -417,7 +417,7 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **22 — Primeras pruebas automáticas del núcleo.** Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **22a — Núcleo desplegado en el VPS con FastAPI + WebSocket.** Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |

@@ -87,3 +87,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Mantener una entrada de trabajo acumulada, ejecutar herramientas secuencialmente y limitar cada turno a 5 ejecuciones configurables.
 - Motivo: Permitir planes de varios pasos con resultados dependientes, conservando orden, trazabilidad y un tope de seguridad.
 - Consecuencia: Cada vuelta a la API tiene su propio registro de uso. Tras alcanzar el límite se permite únicamente la respuesta final; si el modelo solicita otra herramienta, ASTRO detiene el turno con un mensaje controlado.
+
+## 2026-09-25 · Suite rápida sin red ni secretos
+
+- Contexto: Las pruebas manuales y las llamadas reales a la API son lentas, cuestan dinero y pueden fallar por causas externas.
+- Decisión: Mantener una suite pytest determinista que sustituya la API por dobles de prueba, escriba solo en carpetas temporales y no cargue secretos.
+- Motivo: Detectar regresiones del núcleo en segundos, con el mismo resultado en el portátil, GitHub o el VPS.
+- Consecuencia: `python -m pytest` será la comprobación mínima antes de cerrar cambios del núcleo. Las pruebas de integración real seguirán siendo separadas y cada fallo corregido deberá añadir o reforzar una prueba automática.

@@ -145,3 +145,9 @@ Formato:
 - Falló: La primera inspección de la simulación conservó referencias a una lista mutable y no pudo distinguir los estados intermedios; se corrigió el cliente falso para copiar cada petición al recibirla. No era un fallo del bucle real. La captura de PowerShell representó incorrectamente algunas tildes y el signo de multiplicación, sin afectar a los datos ni a los resultados.
 - Decidido: El agente ejecuta una herramienta cada vez y acumula todos los resultados del turno. El límite inicial es 5 ejecuciones, configurable entre 1 y 10; después de la última ejecución permitida puede realizar una petición final de redacción, pero no otra herramienta.
 - Siguiente: fase 22 — Primeras pruebas automáticas del núcleo.
+
+## 2026-09-25 · Fase 22 — Primeras pruebas automáticas del núcleo
+- Hecho: Se instaló y fijó `pytest==9.1.1` y se crearon 10 pruebas en `tests/test_configuracion.py`, `tests/test_herramientas.py` y `tests/test_nucleo.py`. Cubren configuración válida e inválida, coste estimado, fecha/hora, exactitud y seguridad de la calculadora, descubrimiento y ejecución del registro, mensaje del límite y una cadena completa de tres herramientas con cuatro peticiones simuladas. Los dobles de prueba sustituyen la API y neutralizan los registros, por lo que la suite no usa internet, no consume saldo y no lee `.env`. `pytest --collect-only` encontró exactamente 10 pruebas y la ejecución terminó con `10 passed` en 0,72 segundos.
+- Falló: No hubo fallos de implementación ni de prueba. Las cachés creadas por Python y pytest ya estaban cubiertas por `.gitignore` y no se incluirán en el repositorio.
+- Decidido: La suite rápida será determinista, local y sin dependencias externas. Las integraciones reales se validarán por separado cuando corresponda; los errores corregidos deberán recibir una prueba de regresión para evitar que reaparezcan.
+- Siguiente: fase 22a — Núcleo desplegado en el VPS con FastAPI + WebSocket.
