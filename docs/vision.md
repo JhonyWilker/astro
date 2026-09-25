@@ -42,7 +42,7 @@ Estas capacidades llegarán en fases posteriores, con memoria, permisos, confirm
 
 ## Límites técnicos y de gasto
 
-El razonamiento utilizará la API de ChatGPT y necesitará conexión a internet. El gasto máximo será de 50 € al mes. ASTRO registrará el consumo y avisará antes de alcanzar el límite.
+El razonamiento utilizará la API de ChatGPT y necesitará conexión a internet. La API tendrá un límite duro de 50 USD al mes. El VPS se paga aparte mes a mes; por decisión de Jhony, su contratación no reduce el límite de OpenAI. El gasto conjunto podrá superar el límite inicial de 50 € y se revisará con datos reales de uso.
 
 ## Cuándo estará terminado
 

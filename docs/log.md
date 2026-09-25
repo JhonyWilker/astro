@@ -67,3 +67,9 @@ Formato:
 - Falló: No hubo fallos técnicos. Como Git no conserva carpetas vacías, se usaron documentos breves en lugar de marcadores sin contenido.
 - Decidido: La estructura seguirá el diseño modular del plan. No se añadirán paquetes Python ni código vacío hasta que una fase los necesite; `ejercicios` se conserva como material de aprendizaje.
 - Siguiente: fase 9a — Crear el VPS en la UE: cortafuegos, Tailscale y copias automáticas.
+
+## 2026-09-25 · Fase 9a — Crear el VPS en la UE
+- Hecho: Se contrató un Hostinger KVM 2 con pago mensual y Ubuntu 26.04.1 LTS; se instaló Tailscale, se activó UFW con entrada exclusiva por `tailscale0` y se comprobó que el SSH privado funciona mientras el público expira. Se configuraron copias cifradas con restic y rclone en Google Drive, ejecución diaria a las 03:30, retención de 7 diarias, 4 semanales y 6 mensuales, y se validaron dos instantáneas, la integridad del repositorio y una restauración real.
+- Falló: Hetzner exigió verificación de identidad y se cambió de proveedor. La primera clave privada quedó con propietario del entorno aislado y se creó una copia con permisos exclusivos para Jhony. PowerShell interpretó localmente una comprobación de limpieza; la restauración había funcionado y la carpeta temporal se verificó y eliminó por separado.
+- Decidido: El VPS será Hostinger KVM 2 mensual, sin Monarx ni el administrador de Docker. Solo se accederá mediante Tailscale y clave SSH. Las copias diarias usarán Google Drive con permiso limitado `drive.file` y cifrado de restic; la copia semanal incluida de Hostinger queda como segunda capa. El límite de OpenAI de 50 USD se mantiene separado del coste del VPS.
+- Siguiente: fase 10 — Crear `docs/log.md` y la rutina de sesión.

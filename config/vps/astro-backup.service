@@ -1,0 +1,15 @@
+[Unit]
+Description=ASTRO encrypted backup to Google Drive
+Wants=network-online.target tailscaled.service
+After=network-online.target tailscaled.service
+
+[Service]
+Type=oneshot
+Environment=HOME=/root
+Environment=XDG_CACHE_HOME=/root/.cache
+ExecStart=/usr/local/sbin/astro-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+NoNewPrivileges=true

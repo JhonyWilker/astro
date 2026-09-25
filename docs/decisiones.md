@@ -17,3 +17,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Crear un proyecto independiente llamado `ASTRO`, usar una clave restringida a peticiones al modelo y guardarla solo en `.env`. Configurar un límite duro de 50 USD al mes, alertas al 80 % y al 100 %, y mantener desactivada la recarga automática.
 - Motivo: Limitar el impacto de una posible filtración, controlar el gasto y separar claramente el consumo de ASTRO.
 - Consecuencia: Al llegar a 50 USD las nuevas peticiones comenzarán a fallar con error 429, aunque OpenAI advierte que el corte puede tener un pequeño retraso. La clave no caduca por decisión de Jhony, por lo que deberá revocarse y sustituirse si se sospecha una filtración.
+
+## 2026-09-25 · VPS, acceso privado y copias externas
+
+- Contexto: ASTRO necesita un servidor europeo disponible 24/7. Hetzner bloqueó la creación del proyecto hasta completar una verificación de identidad que Jhony no podía hacer en ese momento.
+- Decisión: Usar un Hostinger KVM 2 con pago mensual, Ubuntu 26.04.1 LTS limpio, acceso SSH con clave únicamente a través de Tailscale y UFW sin entradas públicas. Guardar copias diarias cifradas con restic en Google Drive mediante rclone con permiso `drive.file`, conservando 7 diarias, 4 semanales y 6 mensuales.
+- Motivo: Poder continuar sin debilitar la seguridad, pagar mes a mes y mantener una copia externa económica y restaurable.
+- Consecuencia: El primer mes del VPS cuesta 12,09 € con IVA y la renovación indicada es 21,49 € al mes antes de IVA, aproximadamente 26 € con IVA. Este coste se añade al límite de 50 USD de OpenAI, que Jhony decidió no reducir, por lo que el total puede superar los 50 € iniciales. Monarx y el administrador de Docker de Hostinger quedan desactivados; Docker se instalará manualmente solo cuando una fase lo necesite.
