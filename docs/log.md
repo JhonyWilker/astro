@@ -91,3 +91,9 @@ Formato:
 - Falló: La primera captura de una salida local mostró incorrectamente una tilde por la codificación de PowerShell. Se ejecutó la prueba real con UTF-8 y todo el texto se mostró correctamente; no era un fallo del programa.
 - Decidido: El historial se mantiene únicamente en memoria y se envía completo en cada turno. Al cerrar el programa desaparece; la persistencia entre sesiones se añadirá en el bloque 3.
 - Siguiente: fase 13 — Personalidad de ASTRO.
+
+## 2026-09-25 · Fase 13 — Personalidad de ASTRO
+- Hecho: Se creó `config/personality.md` con la identidad, el trato, el idioma, el tono, el criterio y las reglas de privacidad de ASTRO. `core/chat.py` carga el archivo una vez al arrancar y lo envía separado del historial mediante `instructions`. Las pruebas locales confirmaron que el código compila y la configuración se carga; una conversación real de cinco turnos confirmó que ASTRO se identifica correctamente, llama Jhony a su usuario, explica con claridad, no presenta invenciones como hechos, protege conversaciones privadas y cambia de idioma cuando corresponde.
+- Falló: El primer intento de la prueba real fue bloqueado por los permisos de red del entorno protegido con `WinError 10013`; se repitió con acceso autorizado y terminó correctamente. La captura de PowerShell mostró algunos caracteres acentuados con codificación incorrecta, sin afectar a los archivos UTF-8 ni a la respuesta recibida.
+- Decidido: ASTRO tendrá identidad propia y una personalidad serena, inteligente, elegante, directa y discreta, con humor seco ocasional. Usará español de España por defecto, se dirigirá al usuario como «Jhony», hablará en masculino y no copiará la identidad, frases ni voz de JARVIS, FRIDAY, otros personajes o personas reales.
+- Siguiente: fase 14 — Respuestas en streaming.

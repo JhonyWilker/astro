@@ -5,6 +5,9 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 RUTA_ENV = Path(__file__).resolve().parents[1] / ".env"
+RUTA_PERSONALIDAD = (
+    Path(__file__).resolve().parents[1] / "config" / "personality.md"
+)
 
 
 def crear_cliente() -> OpenAI:
@@ -15,13 +18,22 @@ def crear_cliente() -> OpenAI:
     return OpenAI(api_key=clave_api)
 
 
+def cargar_personalidad() -> str:
+    personalidad = RUTA_PERSONALIDAD.read_text(encoding="utf-8").strip()
+    if not personalidad:
+        raise RuntimeError("El archivo config/personality.md está vacío")
+    return personalidad
+
+
 def responder(
     cliente: OpenAI,
     historial: list[dict[str, str]],
+    personalidad: str,
 ) -> str:
     modelo = os.getenv("OPENAI_MODEL", "gpt-6-astra")
     respuesta = cliente.responses.create(
         model=modelo,
+        instructions=personalidad,
         input=historial,
     )
     return respuesta.output_text
@@ -29,6 +41,7 @@ def responder(
 
 def main() -> None:
     cliente = crear_cliente()
+    personalidad = cargar_personalidad()
     historial: list[dict[str, str]] = []
     print("ASTRO: Escribe 'salir' para terminar la conversación.")
 
@@ -44,7 +57,7 @@ def main() -> None:
             continue
 
         historial.append({"role": "user", "content": pregunta})
-        respuesta = responder(cliente, historial)
+        respuesta = responder(cliente, historial, personalidad)
         historial.append({"role": "assistant", "content": respuesta})
         print(f"\nASTRO: {respuesta}")
 

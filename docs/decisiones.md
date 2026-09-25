@@ -24,3 +24,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Usar un Hostinger KVM 2 con pago mensual, Ubuntu 26.04.1 LTS limpio, acceso SSH con clave únicamente a través de Tailscale y UFW sin entradas públicas. Guardar copias diarias cifradas con restic en Google Drive mediante rclone con permiso `drive.file`, conservando 7 diarias, 4 semanales y 6 mensuales.
 - Motivo: Poder continuar sin debilitar la seguridad, pagar mes a mes y mantener una copia externa económica y restaurable.
 - Consecuencia: El primer mes del VPS cuesta 12,09 € con IVA y la renovación indicada es 21,49 € al mes antes de IVA, aproximadamente 26 € con IVA. Este coste se añade al límite de 50 USD de OpenAI, que Jhony decidió no reducir, por lo que el total puede superar los 50 € iniciales. Monarx y el administrador de Docker de Hostinger quedan desactivados; Docker se instalará manualmente solo cuando una fase lo necesite.
+
+## 2026-09-25 · Identidad y personalidad de ASTRO
+
+- Contexto: ASTRO necesita mantener un estilo reconocible y coherente en todas sus respuestas sin depender de que Jhony repita preferencias en cada mensaje.
+- Decisión: Cargar `config/personality.md` como instrucciones del modelo. ASTRO tendrá identidad propia, hablará en masculino, usará español de España por defecto, llamará «Jhony» a su usuario y mantendrá un tono sereno, inteligente, elegante, directo y discreto, con humor seco ocasional.
+- Motivo: Separar la personalidad permanente del historial de conversación permite revisarla y conservar un comportamiento coherente.
+- Consecuencia: ASTRO no afirmará ser ni copiará la identidad, frases o voz de JARVIS, FRIDAY, otros personajes o personas reales; tampoco inventará capacidades, hechos ni acciones.

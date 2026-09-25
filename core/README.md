@@ -11,3 +11,7 @@ Cerebro de ASTRO: bucle principal, contexto y decisiones.
 ```
 
 Escribe `salir` para terminar. El historial solo vive en memoria: al cerrar el programa desaparece. La memoria entre sesiones se añadirá en el bloque 3.
+
+## Personalidad
+
+Al arrancar, `chat.py` carga `config/personality.md` y lo envía a la API como instrucciones del asistente. El archivo contiene comportamiento, no claves ni contraseñas.
