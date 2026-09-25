@@ -101,3 +101,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Ejecutar un único núcleo FastAPI con WebSocket dentro de Docker en el VPS. Publicar el puerto 8000 solo en la IP de Tailscale, usar una sesión en memoria por WebSocket y mantener un único proceso de Uvicorn mientras el historial no sea persistente.
 - Motivo: Centralizar personalidad, herramientas, configuración y uso en un solo servicio, conservando aislamiento entre clientes y una superficie de red privada.
 - Consecuencia: El portátil ya no necesita ejecutar el cerebro para conversar con ASTRO. El contenedor se reinicia automáticamente y está endurecido con usuario sin privilegios, raíz de solo lectura, capacidades eliminadas y secretos fuera de Git; reiniciar el servicio borra las conversaciones actuales hasta que se implemente la memoria persistente.
+
+## 2026-09-25 · Acceso móvil privado mediante Tailscale
+
+- Contexto: Jhony necesita usar ASTRO desde el iPhone fuera de casa sin publicar el núcleo en Internet ni depender de la red del restaurante o del hogar.
+- Decisión: Incorporar el iPhone al mismo tailnet que el portátil y el VPS, y acceder al cliente web mediante la IP privada estable `100.123.43.31`.
+- Motivo: Tailscale cifra el tráfico entre dispositivos y permite cambiar entre Wi‑Fi y datos móviles sin abrir puertos públicos.
+- Consecuencia: ASTRO solo responde a dispositivos autorizados del tailnet. Tailscale debe permanecer conectado en el iPhone; la conexión puede usar un repetidor cifrado cuando las redes no permiten un enlace directo, con algo más de latencia pero sin reducir el aislamiento.
