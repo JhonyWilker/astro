@@ -79,3 +79,9 @@ Formato:
 - Falló: El plan pedía crear `docs/log.md`, pero ya existía y contenía las entradas de las fases anteriores; no se recreó ni se perdió historial. No hubo fallos técnicos.
 - Decidido: Cada sesión seguirá la lista de `docs/rutina-sesion.md`. Una autorización expresa para toda una fase cubrirá sus comandos y archivos ordinarios dentro del repositorio; las acciones de mayor riesgo seguirán confirmándose en el momento correspondiente.
 - Siguiente: fase 11 — Chat en terminal: pregunta → modelo → respuesta.
+
+## 2026-09-25 · Fase 11 — Chat de un turno en la terminal
+- Hecho: Se creó `core/chat.py`, que carga la configuración privada, pide una pregunta con `input()`, la envía a la API de ChatGPT y muestra la respuesta con el prefijo `ASTRO:`. Se documentó su uso en `core/README.md`. La compilación no mostró errores, la entrada vacía se rechazó sin llamar a la API y una pregunta real recibió una respuesta correcta de un turno.
+- Falló: No hubo fallos técnicos.
+- Decidido: El código separa la creación del cliente, la petición al modelo y la interfaz de terminal para poder ampliarlo en las siguientes fases. La fase 11 se limita deliberadamente a un intercambio; el historial se añadirá en la fase 12, la personalidad en la 13 y el manejo avanzado de errores en la 17.
+- Siguiente: fase 12 — Historial: recuerda lo dicho en la misma conversación.
