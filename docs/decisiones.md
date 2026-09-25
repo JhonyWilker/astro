@@ -66,3 +66,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Configurar `Europe/Madrid` en `config/config.yaml` y obtener la fecha y hora mediante una herramienta local de Python basada en `zoneinfo` y `tzdata`.
 - Motivo: Separar el dato real de la redacción del modelo produce respuestas verificables y aplica automáticamente el horario de invierno y de verano.
 - Consecuencia: Una consulta temporal usa dos peticiones a la API, ambas registradas: una para elegir la herramienta y otra para redactar con su resultado. Cambiar de zona no requiere modificar código.
+
+## 2026-09-25 · Calculadora exacta y sin ejecución de código
+
+- Contexto: El modelo puede cometer errores aritméticos y evaluar texto arbitrario con `eval` permitiría ejecutar código dentro de ASTRO.
+- Decisión: Resolver expresiones mediante un recorrido limitado del árbol `ast`, usando `Fraction` y `Decimal`, sin `eval`.
+- Motivo: Obtener resultados reproducibles y exactos mientras se impide el acceso a nombres, funciones, archivos u otras capacidades de Python.
+- Consecuencia: Solo se aceptan los operadores aritméticos documentados y se limitan longitud, exponentes y tamaño del resultado. Las operaciones no permitidas producen un error controlado.

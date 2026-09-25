@@ -45,3 +45,7 @@ Si la petición sigue fallando, ASTRO explica el problema y continúa abierto. `
 ## Herramienta de fecha y hora
 
 Cuando una pregunta depende de la fecha o la hora actuales, el modelo solicita `obtener_fecha_hora`. Python consulta el reloj en la zona definida por `zona_horaria` en `config/config.yaml` y devuelve el resultado al modelo para que redacte la respuesta. Un turno con esta herramienta consume y registra dos peticiones: la decisión de usarla y la respuesta final.
+
+## Calculadora
+
+Cuando Jhony pide un cálculo, el modelo solicita `calcular` con una expresión. Python acepta solo números, paréntesis y operadores aritméticos, conserva enteros y fracciones exactos y devuelve también una representación decimal. No se usa `eval` ni se permite ejecutar código.

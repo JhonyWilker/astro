@@ -150,7 +150,7 @@ Objetivo: el núcleo de ASTRO conversa por texto con personalidad propia, usa he
 | 16 | ✅ Registro de cada petición: tokens, coste, tiempo de respuesta | Informe diario de coste |
 | 17 | ✅ Manejo de errores: sin internet, API caída, reintentos | ASTRO avisa en vez de romperse |
 | 18 | ✅ Primera herramienta: fecha y hora | "¿Qué día es?" responde bien |
-| 19 | Segunda herramienta: calculadora | Cálculos exactos |
+| 19 | ✅ Segunda herramienta: calculadora | Cálculos exactos |
 | 20 | Registro genérico de herramientas: nombre, descripción, parámetros, riesgo | Añadir una herramienta = un archivo |
 | 21 | Bucle de agente: el modelo encadena varias herramientas | Tarea de 3 pasos resuelta sola |
 | 22 | Primeras pruebas automáticas (pytest) del núcleo | 10 pruebas pasan |
@@ -417,7 +417,7 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **19 — Segunda herramienta: calculadora.** Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **20 — Registro genérico de herramientas.** Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |

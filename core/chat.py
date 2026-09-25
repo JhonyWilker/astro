@@ -34,9 +34,15 @@ from core.uso import (
     guardar_registro,
     resumir_registro,
 )
+from tools.calculadora import (
+    DEFINICION_HERRAMIENTA as DEFINICION_CALCULADORA,
+    NOMBRE_HERRAMIENTA as NOMBRE_CALCULADORA,
+    ErrorCalculo,
+    calcular,
+)
 from tools.fecha_hora import (
-    DEFINICION_HERRAMIENTA,
-    NOMBRE_HERRAMIENTA,
+    DEFINICION_HERRAMIENTA as DEFINICION_FECHA_HORA,
+    NOMBRE_HERRAMIENTA as NOMBRE_FECHA_HORA,
     obtener_fecha_hora,
 )
 
@@ -261,7 +267,7 @@ def ejecutar_stream(
         input=entrada,
         max_output_tokens=configuracion.tokens_salida_maximos,
         service_tier=configuracion.nivel_servicio,
-        tools=[DEFINICION_HERRAMIENTA],
+        tools=[DEFINICION_FECHA_HORA, DEFINICION_CALCULADORA],
         parallel_tool_calls=False,
         stream=True,
     )
@@ -332,7 +338,7 @@ def responder(
             registros=(registro_inicial,),
         )
 
-    if len(llamadas) != 1 or llamadas[0].name != NOMBRE_HERRAMIENTA:
+    if len(llamadas) != 1:
         print()
         raise ErrorRespuestaASTRO()
 
@@ -343,11 +349,28 @@ def responder(
         print()
         raise ErrorRespuestaASTRO() from error
 
-    if argumentos != {}:
+    if llamada.name == NOMBRE_FECHA_HORA:
+        if argumentos != {}:
+            print()
+            raise ErrorRespuestaASTRO()
+        resultado_herramienta = obtener_fecha_hora(
+            configuracion.zona_horaria
+        )
+    elif llamada.name == NOMBRE_CALCULADORA:
+        if (
+            not isinstance(argumentos, dict)
+            or set(argumentos) != {"expresion"}
+            or not isinstance(argumentos["expresion"], str)
+        ):
+            print()
+            raise ErrorRespuestaASTRO()
+        try:
+            resultado_herramienta = calcular(argumentos["expresion"])
+        except ErrorCalculo as error:
+            resultado_herramienta = {"error": str(error)}
+    else:
         print()
         raise ErrorRespuestaASTRO()
-
-    resultado_herramienta = obtener_fecha_hora(configuracion.zona_horaria)
     entrada_continuacion = [
         *historial_limitado,
         *respuesta.output,
