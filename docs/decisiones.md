@@ -38,3 +38,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Usar `config/config.yaml` como única fuente para el modelo, el idioma habitual, el máximo de tokens de salida y los turnos de historial. Reservar `.env` exclusivamente para secretos.
 - Motivo: Permitir ajustes operativos sin tocar Python y detectar valores inválidos antes de llamar a la API.
 - Consecuencia: ASTRO debe reiniciarse después de editar el YAML. La configuración inicial es `gpt-6-astra`, español de España, 2000 tokens de salida y 20 turnos de historial; cualquier valor vacío, ausente o no positivo impide el arranque.
+
+## 2026-09-25 · Proveedores de IA intercambiables
+
+- Contexto: El modelo de OpenAI ya puede cambiarse desde `config/config.yaml`, pero el núcleo depende actualmente del cliente de OpenAI.
+- Decisión: Añadir la fase 22e para crear una interfaz común y seleccionar proveedor y modelo desde la configuración, manteniendo OpenAI como proveedor inicial.
+- Motivo: Permitir que Jhony alterne entre proveedores compatibles sin modificar el núcleo de ASTRO.
+- Consecuencia: Solo podrán seleccionarse sin código los proveedores que tengan un adaptador implementado. Cada proveedor nuevo requerirá crear su adaptador una vez y guardar su clave exclusivamente en `.env`; la elección del segundo proveedor se hará en la fase 22e.

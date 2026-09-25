@@ -158,6 +158,7 @@ Objetivo: el núcleo de ASTRO conversa por texto con personalidad propia, usa he
 | 22b | Tailscale en el VPS, el PC y el iPhone | ASTRO responde desde el iPhone fuera de casa sin abrir puertos |
 | 22c | App web propia (PWA): chat de texto con ASTRO, sin Telegram ni apps de terceros | Instalada en la pantalla de inicio del iPhone, conversación completa |
 | 22d | App web: panel de estado y notificaciones push | Aviso de prueba recibido con la app cerrada |
+| 22e | Proveedores de IA intercambiables: elegir proveedor y modelo desde la configuración | Cambiar entre dos proveedores configurados sin tocar código |
 
 Desde la 22a el cerebro vive en el VPS: programas en el PC, despliegas en el VPS y la app web funciona 24/7 con el PC apagado.
 
