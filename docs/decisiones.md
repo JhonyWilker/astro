@@ -31,3 +31,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Cargar `config/personality.md` como instrucciones del modelo. ASTRO tendrá identidad propia, hablará en masculino, usará español de España por defecto, llamará «Jhony» a su usuario y mantendrá un tono sereno, inteligente, elegante, directo y discreto, con humor seco ocasional.
 - Motivo: Separar la personalidad permanente del historial de conversación permite revisarla y conservar un comportamiento coherente.
 - Consecuencia: ASTRO no afirmará ser ni copiará la identidad, frases o voz de JARVIS, FRIDAY, otros personajes o personas reales; tampoco inventará capacidades, hechos ni acciones.
+
+## 2026-09-25 · Configuración central sin secretos
+
+- Contexto: El modelo estaba definido mediante una variable de entorno y el idioma dentro de la personalidad, lo que repartía la configuración entre varios lugares.
+- Decisión: Usar `config/config.yaml` como única fuente para el modelo, el idioma habitual, el máximo de tokens de salida y los turnos de historial. Reservar `.env` exclusivamente para secretos.
+- Motivo: Permitir ajustes operativos sin tocar Python y detectar valores inválidos antes de llamar a la API.
+- Consecuencia: ASTRO debe reiniciarse después de editar el YAML. La configuración inicial es `gpt-6-astra`, español de España, 2000 tokens de salida y 20 turnos de historial; cualquier valor vacío, ausente o no positivo impide el arranque.

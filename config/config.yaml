@@ -1,0 +1,6 @@
+modelo: gpt-6-astra
+idioma: español de España
+
+limites:
+  tokens_salida_maximos: 2000
+  turnos_historial_maximos: 20

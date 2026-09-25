@@ -103,3 +103,9 @@ Formato:
 - Falló: No hubo fallos técnicos. La herramienta que captura la terminal agrupó parte de la salida visual, pero el prefijo apareció antes de completarse la respuesta y las pruebas confirmaron que cada evento se imprime individualmente.
 - Decidido: El chat usará el streaming de la Responses API mediante eventos semánticos. La interfaz muestra el texto conforme llega y el historial recibe la respuesta completa reconstruida; el manejo avanzado de interrupciones y errores seguirá en sus fases previstas.
 - Siguiente: fase 15 — Configuración central.
+
+## 2026-09-25 · Fase 15 — Configuración central
+- Hecho: Se instaló PyYAML 6.0.3 y se creó `config/config.yaml` como fuente central del modelo, el idioma y los límites. `core/chat.py` carga y valida esos valores al arrancar, aplica el modelo y el máximo de tokens a la API, añade el idioma a las instrucciones y limita el contexto a los turnos configurados. Las pruebas locales confirmaron los valores reales, rechazaron un límite inválido y demostraron que `modelo-prueba`, otro idioma y otros límites llegan al cliente sin modificar Python. Una petición real confirmó que ASTRO arranca y reconoce el español de España como idioma habitual.
+- Falló: No hubo fallos técnicos. La captura de PowerShell volvió a representar incorrectamente algunos caracteres acentuados, sin afectar a las comparaciones Unicode, los archivos UTF-8 ni la respuesta de la API.
+- Decidido: La configuración inicial usa `gpt-6-astra`, español de España, un máximo de 2000 tokens de salida y 20 turnos de historial. `.env` queda reservado para secretos; cambiar valores operativos requiere editar `config/config.yaml` y reiniciar ASTRO, no modificar código.
+- Siguiente: fase 16 — Registro de tokens, coste y tiempo de respuesta.

@@ -19,3 +19,7 @@ Al arrancar, `chat.py` carga `config/personality.md` y lo envía a la API como i
 ## Respuestas en streaming
 
 ASTRO muestra cada fragmento de texto en cuanto llega desde la API, sin esperar a que termine la respuesta completa. Al finalizar, une los fragmentos y guarda el texto completo en el historial de la conversación.
+
+## Configuración central
+
+`chat.py` lee `config/config.yaml` al arrancar. El archivo decide el modelo, el idioma habitual, el máximo de tokens de salida y cuántos turnos se envían como contexto. Los valores se validan antes de realizar peticiones a la API.
