@@ -1,0 +1,13 @@
+{
+  "nombre": "ASTRO",
+  "version": "0.1",
+  "idiomas": [
+    "es-ES",
+    "en"
+  ],
+  "limite_mensual_euros": 50,
+  "herramientas": {
+    "fecha_hora": true,
+    "calculadora": true
+  }
+}

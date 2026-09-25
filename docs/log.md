@@ -43,3 +43,9 @@ Formato:
 - Falló: La primera ejecución mostró incorrectamente los símbolos `°` y `€` por la codificación de la consola. La ejecución con el modo UTF-8 mostró el resultado correcto.
 - Decidido: Como Jhony ya conoce los fundamentos de Python, la fase se validó mediante una prueba rápida en lugar de repetir la teoría.
 - Siguiente: fase 6 — Python II: listas, diccionarios, archivos y JSON.
+
+## 2026-09-25 · Fase 6 — Python II
+- Hecho: Se creó y ejecutó un programa que usa listas, diccionarios y archivos para guardar y recuperar una configuración de ASTRO en formato JSON.
+- Falló: No hubo fallos; la comparación confirmó que los datos recuperados coinciden exactamente con los originales.
+- Decidido: La fase se validó mediante una prueba práctica rápida. Los archivos JSON del proyecto usarán UTF-8 y formato indentado para que sean legibles.
+- Siguiente: fase 7 — Entornos virtuales y paquetes.
