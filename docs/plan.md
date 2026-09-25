@@ -132,7 +132,7 @@ Objetivo: tener el entorno instalado y la base de Python suficiente para entende
 | 8 | ✅ Cuenta en la API de OpenAI, clave en `.env`, límite de gasto mensual | Script que imprime una respuesta del modelo |
 | 9 | ✅ Crear la estructura de carpetas del proyecto | Árbol de carpetas en el repositorio |
 | 9a | ✅ Crear el VPS en la UE: cortafuegos, Tailscale y copias automáticas (snapshots) | VPS accesible solo por Tailscale, sin puertos abiertos |
-| 10 | Crear `docs/log.md` y la rutina de sesión | Primera entrada del diario |
+| 10 | ✅ Crear `docs/log.md` y la rutina de sesión | Primera entrada del diario |
 
 **Puerta del bloque 0:** un script de 10 líneas, escrito y entendido por Jhony, que envía una pregunta al modelo y muestra la respuesta.
 
@@ -416,11 +416,11 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **10 — Crear `docs/log.md` y la rutina de sesión.** Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **11 — Chat en terminal: pregunta → modelo → respuesta.** Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |
-| 0 — Preparación | 1–10 | Primer script con el modelo | En curso |
+| 0 — Preparación | 1–10 | Primer script con el modelo | Completado |
 | 1 — Cerebro en texto y app web | 11–22d | Conversación con herramientas, también desde el iPhone | Pendiente |
 | 2 — Voz | 23–38 | ASTRO 0.1 por voz | Pendiente |
 | 3 — Memoria | 39–52 | Recuerda durante semanas | Pendiente |

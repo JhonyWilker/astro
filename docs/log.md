@@ -73,3 +73,9 @@ Formato:
 - Falló: Hetzner exigió verificación de identidad y se cambió de proveedor. La primera clave privada quedó con propietario del entorno aislado y se creó una copia con permisos exclusivos para Jhony. PowerShell interpretó localmente una comprobación de limpieza; la restauración había funcionado y la carpeta temporal se verificó y eliminó por separado.
 - Decidido: El VPS será Hostinger KVM 2 mensual, sin Monarx ni el administrador de Docker. Solo se accederá mediante Tailscale y clave SSH. Las copias diarias usarán Google Drive con permiso limitado `drive.file` y cifrado de restic; la copia semanal incluida de Hostinger queda como segunda capa. El límite de OpenAI de 50 USD se mantiene separado del coste del VPS.
 - Siguiente: fase 10 — Crear `docs/log.md` y la rutina de sesión.
+
+## 2026-09-25 · Fase 10 — Crear el diario y la rutina de sesión
+- Hecho: Se formalizó la rutina de inicio, ejecución y cierre en `docs/rutina-sesion.md` y se enlazó desde `AGENTS.md`. Una prueba automática confirmó que existen el plan, el diario y la rutina, que el diario tiene entradas, que solo hay una fase actual y que las tres secciones de la rutina están presentes. La puerta del bloque 0 se validó con `ejercicios/puerta_bloque_0.py`: tiene exactamente 10 líneas, consulta la API y respondió `Puerta del bloque 0 superada.`.
+- Falló: El plan pedía crear `docs/log.md`, pero ya existía y contenía las entradas de las fases anteriores; no se recreó ni se perdió historial. No hubo fallos técnicos.
+- Decidido: Cada sesión seguirá la lista de `docs/rutina-sesion.md`. Una autorización expresa para toda una fase cubrirá sus comandos y archivos ordinarios dentro del repositorio; las acciones de mayor riesgo seguirán confirmándose en el momento correspondiente.
+- Siguiente: fase 11 — Chat en terminal: pregunta → modelo → respuesta.

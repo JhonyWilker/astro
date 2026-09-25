@@ -2,6 +2,8 @@
 
 Estás ayudando a Jhony(yo) a construir ASTRO, un asistente personal propio, según el plan de `docs/plan.md`. Léelo al empezar cada sesión, junto con las últimas entradas de `docs/log.md`, antes de responder.
 
+Usa `docs/rutina-sesion.md` como lista de comprobación al iniciar, ejecutar y cerrar cada fase.
+
 ## Reglas
 
 - Una fase cada vez, en orden. No te adelantes ni mezcles fases.
