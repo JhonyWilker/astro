@@ -2,12 +2,12 @@
 
 Cerebro de ASTRO: bucle principal, contexto y decisiones.
 
-## Chat de un turno
+## Chat con historial durante la sesión
 
-`chat.py` pide una pregunta en la terminal, la envía al modelo configurado en `.env` y muestra la respuesta.
+`chat.py` mantiene una conversación en la terminal. Cada pregunta y respuesta se añade a una lista y se envía en el turno siguiente para conservar el contexto.
 
 ```powershell
 .\.venv\Scripts\python.exe .\core\chat.py
 ```
 
-En la fase 11 cada ejecución contiene un único intercambio. El historial se añadirá en la fase 12.
+Escribe `salir` para terminar. El historial solo vive en memoria: al cerrar el programa desaparece. La memoria entre sesiones se añadirá en el bloque 3.

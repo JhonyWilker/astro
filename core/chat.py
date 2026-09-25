@@ -15,23 +15,38 @@ def crear_cliente() -> OpenAI:
     return OpenAI(api_key=clave_api)
 
 
-def responder(pregunta: str) -> str:
-    cliente = crear_cliente()
+def responder(
+    cliente: OpenAI,
+    historial: list[dict[str, str]],
+) -> str:
     modelo = os.getenv("OPENAI_MODEL", "gpt-6-astra")
     respuesta = cliente.responses.create(
         model=modelo,
-        input=pregunta,
+        input=historial,
     )
     return respuesta.output_text
 
 
 def main() -> None:
-    pregunta = input("Jhony: ").strip()
-    if not pregunta:
-        print("ASTRO: Escribe una pregunta para que pueda responder.")
-        return
-    respuesta = responder(pregunta)
-    print(f"\nASTRO: {respuesta}")
+    cliente = crear_cliente()
+    historial: list[dict[str, str]] = []
+    print("ASTRO: Escribe 'salir' para terminar la conversación.")
+
+    while True:
+        pregunta = input("\nJhony: ").strip()
+
+        if pregunta.lower() == "salir":
+            print("ASTRO: Hasta luego, Jhony.")
+            return
+
+        if not pregunta:
+            print("ASTRO: Escribe una pregunta para que pueda responder.")
+            continue
+
+        historial.append({"role": "user", "content": pregunta})
+        respuesta = responder(cliente, historial)
+        historial.append({"role": "assistant", "content": respuesta})
+        print(f"\nASTRO: {respuesta}")
 
 
 if __name__ == "__main__":

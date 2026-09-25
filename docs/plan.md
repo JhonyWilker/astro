@@ -143,7 +143,7 @@ Objetivo: el núcleo de ASTRO conversa por texto con personalidad propia, usa he
 | Fase | Qué se hace | Criterio de salida |
 | --- | --- | --- |
 | 11 | ✅ Chat en terminal: pregunta → modelo → respuesta | Conversación de un turno |
-| 12 | Historial: recuerda lo dicho en la misma conversación | 10 turnos coherentes |
+| 12 | ✅ Historial: recuerda lo dicho en la misma conversación | 10 turnos coherentes |
 | 13 | Personalidad de ASTRO en `config/personality.md`: tono, idioma, trato | Respuestas con estilo reconocible |
 | 14 | Respuestas en streaming (palabra a palabra) | El texto aparece mientras se genera |
 | 15 | Configuración central (`config.yaml`): modelo, idioma, límites | Cambiar modelo sin tocar código |
@@ -416,7 +416,7 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **12 — Historial: recuerda lo dicho en la misma conversación.** Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **13 — Personalidad de ASTRO en `config/personality.md`: tono, idioma, trato.** Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |

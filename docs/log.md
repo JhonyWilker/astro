@@ -85,3 +85,9 @@ Formato:
 - Falló: No hubo fallos técnicos.
 - Decidido: El código separa la creación del cliente, la petición al modelo y la interfaz de terminal para poder ampliarlo en las siguientes fases. La fase 11 se limita deliberadamente a un intercambio; el historial se añadirá en la fase 12, la personalidad en la 13 y el manejo avanzado de errores en la 17.
 - Siguiente: fase 12 — Historial: recuerda lo dicho en la misma conversación.
+
+## 2026-09-25 · Fase 12 — Historial durante la conversación
+- Hecho: Se amplió `core/chat.py` con un bucle de conversación y una lista de historial que conserva cada mensaje de Jhony y cada respuesta de ASTRO durante la ejecución. El comando `salir` termina el chat sin llamar a la API y `core/README.md` documenta el comportamiento. Una prueba real de 10 turnos confirmó que ASTRO recuerda el nombre Jhony, el proyecto ASTRO, una palabra y un número, acepta una corrección, usa el número en un cálculo y resume el estado actualizado.
+- Falló: La primera captura de una salida local mostró incorrectamente una tilde por la codificación de PowerShell. Se ejecutó la prueba real con UTF-8 y todo el texto se mostró correctamente; no era un fallo del programa.
+- Decidido: El historial se mantiene únicamente en memoria y se envía completo en cada turno. Al cerrar el programa desaparece; la persistencia entre sesiones se añadirá en el bloque 3.
+- Siguiente: fase 13 — Personalidad de ASTRO.
