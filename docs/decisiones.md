@@ -52,3 +52,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Guardar una línea JSON por petición en `logs/uso.jsonl` con fecha, modelo, nivel de servicio, tokens, tiempo y coste estimado. El archivo es local, está ignorado por Git y no contiene preguntas ni respuestas.
 - Motivo: Obtener datos reales de consumo y latencia con un formato sencillo, auditable y reemplazable cuando llegue la base de datos.
 - Consecuencia: El cálculo usa las tarifas por millón de tokens de `config/config.yaml` y fuerza el nivel estándar `default`. Los precios deben revisarse al cambiar de modelo o tarifa; la factura de OpenAI prevalece sobre la estimación local.
+
+## 2026-09-25 · Reintentos limitados y sin duplicar streams
+
+- Contexto: Los fallos temporales deben recuperarse cuando sea posible, pero combinar reintentos propios con los del SDK podría multiplicar peticiones y duplicar una respuesta parcialmente mostrada.
+- Decisión: Usar exclusivamente los reintentos automáticos del SDK, configurados en 2 con un timeout de 30 segundos por intento. Después de agotarlos, ASTRO informa del tipo de problema y continúa abierto.
+- Motivo: Recuperar errores transitorios sin generar bucles, gasto inesperado ni texto duplicado.
+- Consecuencia: Una respuesta interrumpida después de comenzar el streaming nunca se repite automáticamente. Los metadatos del fallo se guardan localmente sin conversaciones ni mensajes completos de excepción.

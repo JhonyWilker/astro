@@ -5,8 +5,24 @@ import os
 
 import yaml
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import (
+    APIConnectionError,
+    APIError,
+    APIStatusError,
+    APITimeoutError,
+    AuthenticationError,
+    BadRequestError,
+    InternalServerError,
+    OpenAI,
+    PermissionDeniedError,
+    RateLimitError,
+)
 
+from core.errores import (
+    ErrorRespuestaASTRO,
+    crear_registro_error,
+    guardar_registro_error,
+)
 from core.uso import (
     RegistroUso,
     Tarifas,
@@ -28,6 +44,8 @@ class Configuracion:
     modelo: str
     idioma: str
     nivel_servicio: str
+    timeout_segundos: float
+    reintentos: int
     tokens_salida_maximos: int
     turnos_historial_maximos: int
     tarifas: Tarifas
@@ -48,6 +66,10 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     if not isinstance(limites, dict):
         raise ValueError("Falta la sección 'limites' en config/config.yaml")
 
+    api = datos.get("api")
+    if not isinstance(api, dict):
+        raise ValueError("Falta la sección 'api' en config/config.yaml")
+
     precios = datos.get("precios_usd_por_millon")
     if not isinstance(precios, dict):
         raise ValueError(
@@ -59,6 +81,8 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     nivel_servicio = datos.get("nivel_servicio")
     tokens = limites.get("tokens_salida_maximos")
     turnos = limites.get("turnos_historial_maximos")
+    timeout_segundos = api.get("timeout_segundos")
+    reintentos = api.get("reintentos")
 
     for nombre, valor in {
         "modelo": modelo,
@@ -80,6 +104,16 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
         if type(valor) is not int or valor <= 0:
             raise ValueError(f"'{nombre}' debe ser un entero positivo")
 
+    if (
+        isinstance(timeout_segundos, bool)
+        or not isinstance(timeout_segundos, (int, float))
+        or timeout_segundos <= 0
+    ):
+        raise ValueError("'timeout_segundos' debe ser un número positivo")
+
+    if type(reintentos) is not int or not 0 <= reintentos <= 5:
+        raise ValueError("'reintentos' debe ser un entero entre 0 y 5")
+
     valores_precios = {
         "entrada": precios.get("entrada"),
         "entrada_cache": precios.get("entrada_cache"),
@@ -98,6 +132,8 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
         modelo=modelo.strip(),
         idioma=idioma.strip(),
         nivel_servicio=nivel_servicio,
+        timeout_segundos=float(timeout_segundos),
+        reintentos=reintentos,
         tokens_salida_maximos=tokens,
         turnos_historial_maximos=turnos,
         tarifas=Tarifas(
@@ -111,12 +147,16 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     )
 
 
-def crear_cliente() -> OpenAI:
+def crear_cliente(configuracion: Configuracion) -> OpenAI:
     load_dotenv(RUTA_ENV)
     clave_api = os.getenv("OPENAI_API_KEY")
     if not clave_api:
         raise RuntimeError("Falta OPENAI_API_KEY en el archivo .env")
-    return OpenAI(api_key=clave_api)
+    return OpenAI(
+        api_key=clave_api,
+        timeout=configuracion.timeout_segundos,
+        max_retries=configuracion.reintentos,
+    )
 
 
 def cargar_personalidad() -> str:
@@ -124,6 +164,67 @@ def cargar_personalidad() -> str:
     if not personalidad:
         raise RuntimeError("El archivo config/personality.md está vacío")
     return personalidad
+
+
+CODIGOS_LIMITE_PERMANENTE = {
+    "credit_balance_exhausted",
+    "organization_spend_limit_exceeded",
+    "project_spend_limit_exceeded",
+    "organization_usage_limit_exceeded",
+}
+
+
+def es_error_reintentable(error: Exception) -> bool:
+    if isinstance(error, RateLimitError):
+        return getattr(error, "code", None) not in CODIGOS_LIMITE_PERMANENTE
+    return isinstance(
+        error,
+        (APITimeoutError, APIConnectionError, InternalServerError),
+    )
+
+
+def explicar_error(error: Exception) -> str:
+    if isinstance(error, ErrorRespuestaASTRO):
+        return (
+            "La respuesta se interrumpió antes de terminar. "
+            "No la repetiré automáticamente para evitar duplicarla."
+        )
+    if isinstance(error, APITimeoutError):
+        return (
+            "La respuesta tardó demasiado. Ya agoté los reintentos "
+            "configurados; puedes volver a intentarlo."
+        )
+    if isinstance(error, APIConnectionError):
+        return (
+            "No puedo conectar con OpenAI. Comprueba la conexión a internet "
+            "y vuelve a intentarlo."
+        )
+    if isinstance(error, AuthenticationError):
+        return "La clave de OpenAI no es válida o dejó de estar activa."
+    if isinstance(error, PermissionDeniedError):
+        return "La clave de OpenAI no tiene permiso para realizar esta petición."
+    if isinstance(error, BadRequestError):
+        return (
+            "OpenAI rechazó la petición. Revisa el modelo y la configuración."
+        )
+    if isinstance(error, RateLimitError):
+        if getattr(error, "code", None) in CODIGOS_LIMITE_PERMANENTE:
+            return (
+                "Se alcanzó un límite de saldo, uso o gasto de OpenAI. "
+                "Necesita revisión en el panel."
+            )
+        return (
+            "OpenAI está limitando temporalmente las peticiones. "
+            "Espera un momento y vuelve a intentarlo."
+        )
+    if isinstance(error, InternalServerError):
+        return (
+            "OpenAI tiene un problema temporal. "
+            "Ya agoté los reintentos configurados."
+        )
+    if isinstance(error, APIStatusError):
+        return f"OpenAI devolvió un error HTTP {error.status_code}."
+    return "Se produjo un error al comunicarse con OpenAI."
 
 
 def responder(
@@ -157,12 +258,15 @@ def responder(
             fragmentos.append(evento.delta)
         elif evento.type == "response.completed":
             respuesta_final = evento.response
+        elif evento.type in {"error", "response.failed", "response.incomplete"}:
+            print()
+            raise ErrorRespuestaASTRO()
 
     duracion = perf_counter() - inicio
     print()
 
     if respuesta_final is None or respuesta_final.usage is None:
-        raise RuntimeError("La API no devolvió las métricas de uso")
+        raise ErrorRespuestaASTRO()
 
     uso = respuesta_final.usage
     registro = crear_registro(
@@ -187,7 +291,7 @@ def responder(
 
 def main() -> None:
     configuracion = cargar_configuracion()
-    cliente = crear_cliente()
+    cliente = crear_cliente(configuracion)
     personalidad = cargar_personalidad()
     historial: list[dict[str, str]] = []
     print("ASTRO: Escribe 'salir' para terminar la conversación.")
@@ -207,12 +311,20 @@ def main() -> None:
 
         historial.append({"role": "user", "content": pregunta})
         print("\nASTRO: ", end="", flush=True)
-        resultado = responder(
-            cliente,
-            historial,
-            personalidad,
-            configuracion,
-        )
+        try:
+            resultado = responder(
+                cliente,
+                historial,
+                personalidad,
+                configuracion,
+            )
+        except (APIError, ErrorRespuestaASTRO) as error:
+            historial.pop()
+            reintentable = es_error_reintentable(error)
+            registro_error = crear_registro_error(error, reintentable)
+            guardar_registro_error(registro_error)
+            print(f"\nASTRO: {explicar_error(error)}")
+            continue
         historial.append({"role": "assistant", "content": resultado.texto})
         print(f"[{resumir_registro(resultado.registro)}]")
 

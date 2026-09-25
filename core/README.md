@@ -35,3 +35,9 @@ Tras cada respuesta aparece un resumen. El informe del día se muestra al salir 
 ```
 
 El coste es una estimación calculada con las tarifas de `config/config.yaml`; la factura de OpenAI es la referencia definitiva.
+
+## Errores y reintentos
+
+El SDK de OpenAI usa el timeout y los reintentos definidos en `config/config.yaml`. ASTRO no añade otro bucle de reintentos, para evitar peticiones multiplicadas o respuestas duplicadas después de iniciar el streaming.
+
+Si la petición sigue fallando, ASTRO explica el problema y continúa abierto. `logs/errores.jsonl` conserva únicamente metadatos técnicos; no guarda conversaciones ni mensajes completos de la excepción.

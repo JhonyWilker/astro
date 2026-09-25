@@ -148,7 +148,7 @@ Objetivo: el núcleo de ASTRO conversa por texto con personalidad propia, usa he
 | 14 | ✅ Respuestas en streaming (palabra a palabra) | El texto aparece mientras se genera |
 | 15 | ✅ Configuración central (`config.yaml`): modelo, idioma, límites | Cambiar modelo sin tocar código |
 | 16 | ✅ Registro de cada petición: tokens, coste, tiempo de respuesta | Informe diario de coste |
-| 17 | Manejo de errores: sin internet, API caída, reintentos | ASTRO avisa en vez de romperse |
+| 17 | ✅ Manejo de errores: sin internet, API caída, reintentos | ASTRO avisa en vez de romperse |
 | 18 | Primera herramienta: fecha y hora | "¿Qué día es?" responde bien |
 | 19 | Segunda herramienta: calculadora | Cálculos exactos |
 | 20 | Registro genérico de herramientas: nombre, descripción, parámetros, riesgo | Añadir una herramienta = un archivo |
@@ -417,7 +417,7 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **17 — Manejo de errores: sin internet, API caída, reintentos.** Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **18 — Primera herramienta: fecha y hora.** Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |

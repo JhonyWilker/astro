@@ -2,6 +2,10 @@ modelo: gpt-6-astra
 idioma: español de España
 nivel_servicio: default
 
+api:
+  timeout_segundos: 30
+  reintentos: 2
+
 limites:
   tokens_salida_maximos: 2000
   turnos_historial_maximos: 20
