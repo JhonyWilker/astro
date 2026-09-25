@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ASTRO</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { max-width: 760px; margin: 0 auto; padding: 24px; background: #071018; color: #e8f0f7; }
+    header { display: flex; justify-content: space-between; align-items: center; }
+    #estado { color: #7dd3fc; }
+    #mensajes { min-height: 55vh; padding: 16px 0; }
+    .mensaje { padding: 12px 14px; margin: 10px 0; border-radius: 12px; white-space: pre-wrap; }
+    .jhony { background: #15324a; margin-left: 15%; }
+    .astro { background: #17212b; margin-right: 15%; }
+    .sistema { color: #94a3b8; font-size: 0.9rem; }
+    form { display: flex; gap: 8px; position: sticky; bottom: 0; background: #071018; padding: 12px 0; }
+    input { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #385269; background: #0d1822; color: inherit; }
+    button { padding: 12px 18px; border: 0; border-radius: 8px; background: #38bdf8; color: #031018; font-weight: 700; }
+    button:disabled, input:disabled { opacity: 0.5; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ASTRO</h1>
+    <span id="estado">Conectando…</span>
+  </header>
+  <main id="mensajes"></main>
+  <form id="formulario">
+    <input id="entrada" autocomplete="off" placeholder="Escribe a ASTRO" disabled>
+    <button id="enviar" disabled>Enviar</button>
+  </form>
+  <script>
+    const estado = document.querySelector("#estado");
+    const mensajes = document.querySelector("#mensajes");
+    const formulario = document.querySelector("#formulario");
+    const entrada = document.querySelector("#entrada");
+    const enviar = document.querySelector("#enviar");
+    let socket;
+    let respuestaActual = null;
+
+    function agregar(texto, clase) {
+      const elemento = document.createElement("div");
+      elemento.className = `mensaje ${clase}`;
+      elemento.textContent = texto;
+      mensajes.appendChild(elemento);
+      elemento.scrollIntoView({ behavior: "smooth" });
+      return elemento;
+    }
+
+    function habilitar(valor) {
+      entrada.disabled = !valor;
+      enviar.disabled = !valor;
+      if (valor) entrada.focus();
+    }
+
+    function conectar() {
+      const protocolo = location.protocol === "https:" ? "wss:" : "ws:";
+      socket = new WebSocket(`${protocolo}//${location.host}/ws`);
+
+      socket.onmessage = ({ data }) => {
+        const evento = JSON.parse(data);
+        if (evento.type === "ready") {
+          estado.textContent = "Conectado";
+          habilitar(true);
+        } else if (evento.type === "delta") {
+          if (!respuestaActual) respuestaActual = agregar("", "astro");
+          respuestaActual.textContent += evento.text;
+        } else if (evento.type === "done") {
+          const tokens = evento.usage.reduce((total, item) => total + item.tokens, 0);
+          const coste = evento.usage.reduce(
+            (total, item) => total + item.coste_estimado_usd, 0
+          );
+          agregar(
+            `${evento.usage.length} petición/es · ${tokens} tokens · ${coste.toFixed(6)} USD`,
+            "sistema"
+          );
+          respuestaActual = null;
+          habilitar(true);
+        } else if (evento.type === "error") {
+          agregar(`Error: ${evento.message}`, "sistema");
+          respuestaActual = null;
+          habilitar(true);
+        }
+      };
+
+      socket.onclose = () => {
+        estado.textContent = "Desconectado";
+        habilitar(false);
+      };
+    }
+
+    formulario.addEventListener("submit", (evento) => {
+      evento.preventDefault();
+      const texto = entrada.value.trim();
+      if (!texto) return;
+      agregar(texto, "jhony");
+      socket.send(JSON.stringify({ type: "message", text: texto }));
+      entrada.value = "";
+      respuestaActual = null;
+      habilitar(false);
+    });
+
+    conectar();
+  </script>
+</body>
+</html>

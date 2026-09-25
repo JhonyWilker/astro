@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
@@ -24,8 +25,6 @@ from openai.types.responses import Response
 from core.errores import (
     ErrorLimiteHerramientas,
     ErrorRespuestaASTRO,
-    crear_registro_error,
-    guardar_registro_error,
 )
 from core.uso import (
     RegistroUso,
@@ -43,6 +42,8 @@ RUTA_CONFIG = Path(__file__).resolve().parents[1] / "config" / "config.yaml"
 RUTA_PERSONALIDAD = (
     Path(__file__).resolve().parents[1] / "config" / "personality.md"
 )
+
+EmitirTexto = Callable[[str], None]
 
 
 @dataclass(frozen=True)
@@ -273,6 +274,7 @@ def ejecutar_stream(
     registro: RegistroHerramientas,
     instrucciones: str,
     entrada: list,
+    emitir_texto: EmitirTexto | None = None,
 ) -> tuple[Response, str, RegistroUso]:
     inicio = perf_counter()
 
@@ -291,12 +293,12 @@ def ejecutar_stream(
 
     for evento in eventos:
         if evento.type == "response.output_text.delta":
-            print(evento.delta, end="", flush=True)
+            if emitir_texto is not None:
+                emitir_texto(evento.delta)
             fragmentos.append(evento.delta)
         elif evento.type == "response.completed":
             respuesta_final = evento.response
         elif evento.type in {"error", "response.failed", "response.incomplete"}:
-            print()
             raise ErrorRespuestaASTRO()
 
     duracion = perf_counter() - inicio
@@ -328,6 +330,7 @@ def responder(
     personalidad: str,
     configuracion: Configuracion,
     registro: RegistroHerramientas,
+    emitir_texto: EmitirTexto | None = None,
 ) -> ResultadoRespuesta:
     instrucciones = (
         f"{personalidad}\n\n"
@@ -347,6 +350,7 @@ def responder(
             registro,
             instrucciones,
             entrada_actual,
+            emitir_texto,
         )
         fragmentos_totales.append(texto)
         registros.append(registro_uso)
@@ -357,32 +361,27 @@ def responder(
         ]
 
         if not llamadas:
-            print()
             return ResultadoRespuesta(
                 texto="".join(fragmentos_totales),
                 registros=tuple(registros),
             )
 
         if len(llamadas) != 1:
-            print()
             raise ErrorRespuestaASTRO()
 
         if (
             pasos_herramienta
             >= configuracion.pasos_herramienta_maximos
         ):
-            print()
             raise ErrorLimiteHerramientas()
 
         llamada = llamadas[0]
         try:
             argumentos = json.loads(llamada.arguments)
         except json.JSONDecodeError as error:
-            print()
             raise ErrorRespuestaASTRO() from error
 
         if not isinstance(argumentos, dict):
-            print()
             raise ErrorRespuestaASTRO()
 
         contexto = ContextoHerramienta(
@@ -395,7 +394,6 @@ def responder(
                 contexto,
             )
         except ErrorHerramienta as error:
-            print()
             raise ErrorRespuestaASTRO() from error
 
         entrada_actual.extend(respuesta.output)
@@ -413,11 +411,14 @@ def responder(
 
 
 def main() -> None:
-    configuracion = cargar_configuracion()
-    cliente = crear_cliente(configuracion)
-    personalidad = cargar_personalidad()
-    registro = RegistroHerramientas.descubrir()
-    historial: list[dict[str, str]] = []
+    from core.sesion import crear_nucleo
+
+    nucleo = crear_nucleo()
+    sesion = nucleo.nueva_sesion()
+
+    def emitir_terminal(texto: str) -> None:
+        print(texto, end="", flush=True)
+
     print("ASTRO: Escribe 'salir' para terminar la conversación.")
 
     while True:
@@ -433,24 +434,16 @@ def main() -> None:
             print("ASTRO: Escribe una pregunta para que pueda responder.")
             continue
 
-        historial.append({"role": "user", "content": pregunta})
         print("\nASTRO: ", end="", flush=True)
         try:
-            resultado = responder(
-                cliente,
-                historial,
-                personalidad,
-                configuracion,
-                registro,
+            resultado = sesion.preguntar(
+                pregunta,
+                emitir_terminal,
             )
         except (APIError, ErrorRespuestaASTRO) as error:
-            historial.pop()
-            reintentable = es_error_reintentable(error)
-            registro_error = crear_registro_error(error, reintentable)
-            guardar_registro_error(registro_error)
             print(f"\nASTRO: {explicar_error(error)}")
             continue
-        historial.append({"role": "assistant", "content": resultado.texto})
+        print()
         for registro in resultado.registros:
             print(f"[{resumir_registro(registro)}]")
 

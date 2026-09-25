@@ -1,0 +1,20 @@
+services:
+  astro:
+    build:
+      context: .
+    image: astro-core:latest
+    container_name: astro-core
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${ASTRO_BIND_IP:?Define ASTRO_BIND_IP}:8000:8000"
+    volumes:
+      - ./logs:/app/logs
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

@@ -59,3 +59,17 @@ Cuando Jhony pide un cálculo, el modelo solicita `calcular` con una expresión.
 Dentro de un turno, ASTRO puede alternar varias veces entre el modelo y las herramientas. Cada resultado se añade al contexto de trabajo para que el modelo decida el paso siguiente, hasta producir una respuesta sin nuevas llamadas.
 
 El número máximo de ejecuciones se define en `agente.pasos_herramienta_maximos`. Al alcanzarlo, ASTRO detiene la tarea para evitar bucles y gasto inesperado. Las herramientas se ejecutan de una en una y en orden.
+
+## API y WebSocket
+
+`core/api.py` publica el mismo núcleo mediante FastAPI:
+
+- `GET /health`: comprobación de salud.
+- `GET /`: cliente web de diagnóstico.
+- `WS /ws`: conversación en streaming.
+
+El servidor envía `ready` al conectar, uno o más mensajes `delta` durante la respuesta y `done` al terminar, con el uso agregado del turno. Los fallos se envían como `error`.
+
+Cada WebSocket crea una `SesionASTRO` independiente. `core/sesion.py` comparte la configuración, la personalidad y el registro de herramientas, pero conserva el historial por conexión para que dos clientes no mezclen sus conversaciones.
+
+El despliegue usa un único proceso de Uvicorn porque el historial todavía vive en memoria. La persistencia compartida llegará en el bloque de memoria.

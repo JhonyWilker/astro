@@ -94,3 +94,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Mantener una suite pytest determinista que sustituya la API por dobles de prueba, escriba solo en carpetas temporales y no cargue secretos.
 - Motivo: Detectar regresiones del núcleo en segundos, con el mismo resultado en el portátil, GitHub o el VPS.
 - Consecuencia: `python -m pytest` será la comprobación mínima antes de cerrar cambios del núcleo. Las pruebas de integración real seguirán siendo separadas y cada fallo corregido deberá añadir o reforzar una prueba automática.
+
+## 2026-09-25 · Núcleo único desplegado en el VPS
+
+- Contexto: La terminal y la web deben hablar con el mismo ASTRO disponible 24/7, sin exponer el servicio a Internet ni mezclar historiales entre usuarios o conexiones.
+- Decisión: Ejecutar un único núcleo FastAPI con WebSocket dentro de Docker en el VPS. Publicar el puerto 8000 solo en la IP de Tailscale, usar una sesión en memoria por WebSocket y mantener un único proceso de Uvicorn mientras el historial no sea persistente.
+- Motivo: Centralizar personalidad, herramientas, configuración y uso en un solo servicio, conservando aislamiento entre clientes y una superficie de red privada.
+- Consecuencia: El portátil ya no necesita ejecutar el cerebro para conversar con ASTRO. El contenedor se reinicia automáticamente y está endurecido con usuario sin privilegios, raíz de solo lectura, capacidades eliminadas y secretos fuera de Git; reiniciar el servicio borra las conversaciones actuales hasta que se implemente la memoria persistente.
