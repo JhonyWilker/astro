@@ -49,3 +49,9 @@ Formato:
 - Falló: No hubo fallos; la comparación confirmó que los datos recuperados coinciden exactamente con los originales.
 - Decidido: La fase se validó mediante una prueba práctica rápida. Los archivos JSON del proyecto usarán UTF-8 y formato indentado para que sean legibles.
 - Siguiente: fase 7 — Entornos virtuales y paquetes.
+
+## 2026-09-25 · Fase 7 — Entornos virtuales y paquetes
+- Hecho: Se creó `.venv`, se instaló `python-dotenv` 1.2.3, se generó `requirements.txt` y se comprobó que permite instalar e importar la dependencia.
+- Falló: El primer intento de descarga fue bloqueado por la red del entorno aislado. Se repitió con permiso y la instalación terminó correctamente.
+- Decidido: Las dependencias de ASTRO se instalarán en `.venv`, se fijarán con versión exacta en `requirements.txt` y el entorno virtual nunca se subirá a Git.
+- Siguiente: fase 8 — Cuenta y API de OpenAI, clave en `.env` y límite de gasto mensual.

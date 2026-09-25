@@ -128,7 +128,7 @@ Objetivo: tener el entorno instalado y la base de Python suficiente para entende
 | 4 | ✅ Crear cuenta de GitHub y repositorio privado `astro` | Primer commit subido |
 | 5 | ✅ Python I: variables, funciones, condiciones, bucles | 5 ejercicios resueltos |
 | 6 | ✅ Python II: listas, diccionarios, archivos, JSON | Programa que guarda y lee un JSON |
-| 7 | Entornos virtuales y paquetes (venv, pip) | `requirements.txt` funcionando |
+| 7 | ✅ Entornos virtuales y paquetes (venv, pip) | `requirements.txt` funcionando |
 | 8 | Cuenta en la API de OpenAI, clave en `.env`, límite de gasto mensual | Script que imprime una respuesta del modelo |
 | 9 | Crear la estructura de carpetas del proyecto | Árbol de carpetas en el repositorio |
 | 9a | Crear el VPS en la UE: cortafuegos, Tailscale y copias automáticas (snapshots) | VPS accesible solo por Tailscale, sin puertos abiertos |
@@ -416,7 +416,7 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **7 — Entornos virtuales y paquetes.** Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **8 — Cuenta y API de OpenAI, clave en `.env` y límite de gasto mensual.** Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |
