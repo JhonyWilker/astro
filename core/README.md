@@ -41,3 +41,7 @@ El coste es una estimación calculada con las tarifas de `config/config.yaml`; l
 El SDK de OpenAI usa el timeout y los reintentos definidos en `config/config.yaml`. ASTRO no añade otro bucle de reintentos, para evitar peticiones multiplicadas o respuestas duplicadas después de iniciar el streaming.
 
 Si la petición sigue fallando, ASTRO explica el problema y continúa abierto. `logs/errores.jsonl` conserva únicamente metadatos técnicos; no guarda conversaciones ni mensajes completos de la excepción.
+
+## Herramienta de fecha y hora
+
+Cuando una pregunta depende de la fecha o la hora actuales, el modelo solicita `obtener_fecha_hora`. Python consulta el reloj en la zona definida por `zona_horaria` en `config/config.yaml` y devuelve el resultado al modelo para que redacte la respuesta. Un turno con esta herramienta consume y registra dos peticiones: la decisión de usarla y la respuesta final.

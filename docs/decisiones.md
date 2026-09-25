@@ -59,3 +59,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Usar exclusivamente los reintentos automáticos del SDK, configurados en 2 con un timeout de 30 segundos por intento. Después de agotarlos, ASTRO informa del tipo de problema y continúa abierto.
 - Motivo: Recuperar errores transitorios sin generar bucles, gasto inesperado ni texto duplicado.
 - Consecuencia: Una respuesta interrumpida después de comenzar el streaming nunca se repite automáticamente. Los metadatos del fallo se guardan localmente sin conversaciones ni mensajes completos de excepción.
+
+## 2026-09-25 · Fecha y hora local como herramienta
+
+- Contexto: El modelo no debe adivinar la fecha ni depender de información potencialmente desactualizada, y ASTRO necesita respetar los cambios de horario de España.
+- Decisión: Configurar `Europe/Madrid` en `config/config.yaml` y obtener la fecha y hora mediante una herramienta local de Python basada en `zoneinfo` y `tzdata`.
+- Motivo: Separar el dato real de la redacción del modelo produce respuestas verificables y aplica automáticamente el horario de invierno y de verano.
+- Consecuencia: Una consulta temporal usa dos peticiones a la API, ambas registradas: una para elegir la herramienta y otra para redactar con su resultado. Cambiar de zona no requiere modificar código.

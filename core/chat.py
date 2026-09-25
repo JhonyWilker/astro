@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+import json
 import os
 
 import yaml
@@ -17,6 +19,7 @@ from openai import (
     PermissionDeniedError,
     RateLimitError,
 )
+from openai.types.responses import Response
 
 from core.errores import (
     ErrorRespuestaASTRO,
@@ -31,6 +34,11 @@ from core.uso import (
     guardar_registro,
     resumir_registro,
 )
+from tools.fecha_hora import (
+    DEFINICION_HERRAMIENTA,
+    NOMBRE_HERRAMIENTA,
+    obtener_fecha_hora,
+)
 
 RUTA_ENV = Path(__file__).resolve().parents[1] / ".env"
 RUTA_CONFIG = Path(__file__).resolve().parents[1] / "config" / "config.yaml"
@@ -43,6 +51,7 @@ RUTA_PERSONALIDAD = (
 class Configuracion:
     modelo: str
     idioma: str
+    zona_horaria: str
     nivel_servicio: str
     timeout_segundos: float
     reintentos: int
@@ -54,7 +63,7 @@ class Configuracion:
 @dataclass(frozen=True)
 class ResultadoRespuesta:
     texto: str
-    registro: RegistroUso
+    registros: tuple[RegistroUso, ...]
 
 
 def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
@@ -78,6 +87,7 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
 
     modelo = datos.get("modelo")
     idioma = datos.get("idioma")
+    zona_horaria = datos.get("zona_horaria")
     nivel_servicio = datos.get("nivel_servicio")
     tokens = limites.get("tokens_salida_maximos")
     turnos = limites.get("turnos_historial_maximos")
@@ -87,6 +97,7 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     for nombre, valor in {
         "modelo": modelo,
         "idioma": idioma,
+        "zona_horaria": zona_horaria,
         "nivel_servicio": nivel_servicio,
     }.items():
         if not isinstance(valor, str) or not valor.strip():
@@ -96,6 +107,14 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
         raise ValueError(
             "'nivel_servicio' debe ser 'default' para usar las tarifas configuradas"
         )
+
+    zona_horaria = zona_horaria.strip()
+    try:
+        ZoneInfo(zona_horaria)
+    except ZoneInfoNotFoundError as error:
+        raise ValueError(
+            f"'zona_horaria' no es válida: {zona_horaria}"
+        ) from error
 
     for nombre, valor in {
         "tokens_salida_maximos": tokens,
@@ -131,6 +150,7 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     return Configuracion(
         modelo=modelo.strip(),
         idioma=idioma.strip(),
+        zona_horaria=zona_horaria,
         nivel_servicio=nivel_servicio,
         timeout_segundos=float(timeout_segundos),
         reintentos=reintentos,
@@ -227,26 +247,22 @@ def explicar_error(error: Exception) -> str:
     return "Se produjo un error al comunicarse con OpenAI."
 
 
-def responder(
+def ejecutar_stream(
     cliente: OpenAI,
-    historial: list[dict[str, str]],
-    personalidad: str,
     configuracion: Configuracion,
-) -> ResultadoRespuesta:
-    instrucciones = (
-        f"{personalidad}\n\n"
-        f"Idioma habitual configurado: {configuracion.idioma}."
-    )
-    limite_mensajes = configuracion.turnos_historial_maximos * 2 - 1
-    historial_limitado = historial[-limite_mensajes:]
+    instrucciones: str,
+    entrada: list,
+) -> tuple[Response, str, RegistroUso]:
     inicio = perf_counter()
 
     eventos = cliente.responses.create(
         model=configuracion.modelo,
         instructions=instrucciones,
-        input=historial_limitado,
+        input=entrada,
         max_output_tokens=configuracion.tokens_salida_maximos,
         service_tier=configuracion.nivel_servicio,
+        tools=[DEFINICION_HERRAMIENTA],
+        parallel_tool_calls=False,
         stream=True,
     )
     fragmentos: list[str] = []
@@ -263,7 +279,6 @@ def responder(
             raise ErrorRespuestaASTRO()
 
     duracion = perf_counter() - inicio
-    print()
 
     if respuesta_final is None or respuesta_final.usage is None:
         raise ErrorRespuestaASTRO()
@@ -283,9 +298,86 @@ def responder(
     )
     guardar_registro(registro)
 
+    return respuesta_final, "".join(fragmentos), registro
+
+
+def responder(
+    cliente: OpenAI,
+    historial: list[dict[str, str]],
+    personalidad: str,
+    configuracion: Configuracion,
+) -> ResultadoRespuesta:
+    instrucciones = (
+        f"{personalidad}\n\n"
+        f"Idioma habitual configurado: {configuracion.idioma}."
+    )
+    limite_mensajes = configuracion.turnos_historial_maximos * 2 - 1
+    historial_limitado = historial[-limite_mensajes:]
+    respuesta, texto_inicial, registro_inicial = ejecutar_stream(
+        cliente,
+        configuracion,
+        instrucciones,
+        historial_limitado,
+    )
+    llamadas = [
+        elemento
+        for elemento in respuesta.output
+        if elemento.type == "function_call"
+    ]
+
+    if not llamadas:
+        print()
+        return ResultadoRespuesta(
+            texto=texto_inicial,
+            registros=(registro_inicial,),
+        )
+
+    if len(llamadas) != 1 or llamadas[0].name != NOMBRE_HERRAMIENTA:
+        print()
+        raise ErrorRespuestaASTRO()
+
+    llamada = llamadas[0]
+    try:
+        argumentos = json.loads(llamada.arguments)
+    except json.JSONDecodeError as error:
+        print()
+        raise ErrorRespuestaASTRO() from error
+
+    if argumentos != {}:
+        print()
+        raise ErrorRespuestaASTRO()
+
+    resultado_herramienta = obtener_fecha_hora(configuracion.zona_horaria)
+    entrada_continuacion = [
+        *historial_limitado,
+        *respuesta.output,
+        {
+            "type": "function_call_output",
+            "call_id": llamada.call_id,
+            "output": json.dumps(
+                resultado_herramienta,
+                ensure_ascii=False,
+            ),
+        },
+    ]
+    respuesta_final, texto_final, registro_final = ejecutar_stream(
+        cliente,
+        configuracion,
+        instrucciones,
+        entrada_continuacion,
+    )
+
+    if any(
+        elemento.type == "function_call"
+        for elemento in respuesta_final.output
+    ):
+        print()
+        raise ErrorRespuestaASTRO()
+
+    print()
     return ResultadoRespuesta(
-        texto="".join(fragmentos),
-        registro=registro,
+        texto=texto_inicial + texto_final,
+        registros=(registro_inicial, registro_final),
     )
 
 
@@ -326,7 +418,8 @@ def main() -> None:
             print(f"\nASTRO: {explicar_error(error)}")
             continue
         historial.append({"role": "assistant", "content": resultado.texto})
-        print(f"[{resumir_registro(resultado.registro)}]")
+        for registro in resultado.registros:
+            print(f"[{resumir_registro(registro)}]")
 
 
 if __name__ == "__main__":

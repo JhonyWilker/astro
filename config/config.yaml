@@ -1,5 +1,6 @@
 modelo: gpt-6-astra
 idioma: español de España
+zona_horaria: Europe/Madrid
 nivel_servicio: default
 
 api:
