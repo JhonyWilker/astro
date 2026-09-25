@@ -31,12 +31,21 @@ def responder(
     personalidad: str,
 ) -> str:
     modelo = os.getenv("OPENAI_MODEL", "gpt-6-astra")
-    respuesta = cliente.responses.create(
+    eventos = cliente.responses.create(
         model=modelo,
         instructions=personalidad,
         input=historial,
+        stream=True,
     )
-    return respuesta.output_text
+    fragmentos: list[str] = []
+
+    for evento in eventos:
+        if evento.type == "response.output_text.delta":
+            print(evento.delta, end="", flush=True)
+            fragmentos.append(evento.delta)
+
+    print()
+    return "".join(fragmentos)
 
 
 def main() -> None:
@@ -57,9 +66,9 @@ def main() -> None:
             continue
 
         historial.append({"role": "user", "content": pregunta})
+        print("\nASTRO: ", end="", flush=True)
         respuesta = responder(cliente, historial, personalidad)
         historial.append({"role": "assistant", "content": respuesta})
-        print(f"\nASTRO: {respuesta}")
 
 
 if __name__ == "__main__":

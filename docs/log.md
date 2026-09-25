@@ -97,3 +97,9 @@ Formato:
 - Falló: El primer intento de la prueba real fue bloqueado por los permisos de red del entorno protegido con `WinError 10013`; se repitió con acceso autorizado y terminó correctamente. La captura de PowerShell mostró algunos caracteres acentuados con codificación incorrecta, sin afectar a los archivos UTF-8 ni a la respuesta recibida.
 - Decidido: ASTRO tendrá identidad propia y una personalidad serena, inteligente, elegante, directa y discreta, con humor seco ocasional. Usará español de España por defecto, se dirigirá al usuario como «Jhony», hablará en masculino y no copiará la identidad, frases ni voz de JARVIS, FRIDAY, otros personajes o personas reales.
 - Siguiente: fase 14 — Respuestas en streaming.
+
+## 2026-09-25 · Fase 14 — Respuestas en streaming
+- Hecho: Se modificó `core/chat.py` para solicitar respuestas con `stream=True`, procesar los eventos `response.output_text.delta` y mostrar cada fragmento inmediatamente con `flush=True`. Los fragmentos se acumulan y se unen al terminar para conservar la respuesta completa en el historial. La prueba local simuló tres fragmentos y confirmó su reconstrucción; la prueba real mostró una respuesta de 12 puntos en una terminal interactiva y un segundo turno recordó correctamente que eran 12.
+- Falló: No hubo fallos técnicos. La herramienta que captura la terminal agrupó parte de la salida visual, pero el prefijo apareció antes de completarse la respuesta y las pruebas confirmaron que cada evento se imprime individualmente.
+- Decidido: El chat usará el streaming de la Responses API mediante eventos semánticos. La interfaz muestra el texto conforme llega y el historial recibe la respuesta completa reconstruida; el manejo avanzado de interrupciones y errores seguirá en sus fases previstas.
+- Siguiente: fase 15 — Configuración central.

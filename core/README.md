@@ -15,3 +15,7 @@ Escribe `salir` para terminar. El historial solo vive en memoria: al cerrar el p
 ## Personalidad
 
 Al arrancar, `chat.py` carga `config/personality.md` y lo envía a la API como instrucciones del asistente. El archivo contiene comportamiento, no claves ni contraseñas.
+
+## Respuestas en streaming
+
+ASTRO muestra cada fragmento de texto en cuanto llega desde la API, sin esperar a que termine la respuesta completa. Al finalizar, une los fragmentos y guarda el texto completo en el historial de la conversación.
