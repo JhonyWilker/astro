@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import AsyncIterator
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from openai import APIError
 
 from core.chat import explicar_error
@@ -13,12 +14,10 @@ from core.errores import ErrorRespuestaASTRO
 from core.sesion import NucleoASTRO, crear_nucleo
 from core.uso import RegistroUso
 
-RUTA_WEB = (
-    Path(__file__).resolve().parents[1]
-    / "clients"
-    / "web"
-    / "index.html"
-)
+RUTA_WEB = Path(__file__).resolve().parents[1] / "clients" / "web"
+RUTA_INDEX = RUTA_WEB / "index.html"
+RUTA_MANIFIESTO = RUTA_WEB / "manifest.webmanifest"
+RUTA_SERVICE_WORKER = RUTA_WEB / "service-worker.js"
 
 
 def serializar_uso(registro: RegistroUso) -> dict[str, int | float]:
@@ -49,7 +48,30 @@ def crear_app(nucleo: NucleoASTRO | None = None) -> FastAPI:
 
     @aplicacion.get("/", response_class=HTMLResponse)
     async def web() -> HTMLResponse:
-        return HTMLResponse(RUTA_WEB.read_text(encoding="utf-8"))
+        return HTMLResponse(RUTA_INDEX.read_text(encoding="utf-8"))
+
+    @aplicacion.get(
+        "/manifest.webmanifest",
+        response_class=FileResponse,
+        include_in_schema=False,
+    )
+    async def manifiesto() -> FileResponse:
+        return FileResponse(
+            RUTA_MANIFIESTO,
+            media_type="application/manifest+json",
+        )
+
+    @aplicacion.get(
+        "/service-worker.js",
+        response_class=FileResponse,
+        include_in_schema=False,
+    )
+    async def service_worker() -> FileResponse:
+        return FileResponse(
+            RUTA_SERVICE_WORKER,
+            media_type="application/javascript",
+            headers={"Service-Worker-Allowed": "/"},
+        )
 
     @aplicacion.websocket("/ws")
     async def websocket_chat(websocket: WebSocket) -> None:
@@ -120,6 +142,12 @@ def crear_app(nucleo: NucleoASTRO | None = None) -> FastAPI:
                 )
         except WebSocketDisconnect:
             return
+
+    aplicacion.mount(
+        "/static",
+        StaticFiles(directory=RUTA_WEB),
+        name="static",
+    )
 
     return aplicacion
 

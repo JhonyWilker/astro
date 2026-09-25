@@ -73,3 +73,9 @@ El servidor envía `ready` al conectar, uno o más mensajes `delta` durante la r
 Cada WebSocket crea una `SesionASTRO` independiente. `core/sesion.py` comparte la configuración, la personalidad y el registro de herramientas, pero conserva el historial por conexión para que dos clientes no mezclen sus conversaciones.
 
 El despliegue usa un único proceso de Uvicorn porque el historial todavía vive en memoria. La persistencia compartida llegará en el bloque de memoria.
+
+## Aplicación web instalable
+
+`clients/web` contiene la PWA de ASTRO: HTML accesible, estilos adaptados al iPhone, cliente WebSocket seguro, manifiesto, service worker e icono SVG. La app muestra el streaming, el coste del último turno, el estado de conexión y reconecta automáticamente.
+
+El service worker cachea solo la carcasa visual para que la interfaz pueda abrirse aunque la red tarde. No intercepta el WebSocket ni guarda conversaciones. La URL preferida es `https://astro-vps.tailbee6db.ts.net/`.

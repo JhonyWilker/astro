@@ -33,7 +33,7 @@ Las restauraciones deben hacerse primero en una carpeta temporal y compararse co
 
 El proyecto desplegado vive en `/opt/astro` y se ejecuta con Docker Compose. El contenedor funciona con un usuario sin privilegios, sistema de archivos de solo lectura, capacidades Linux eliminadas y reinicio automático salvo detención manual.
 
-El archivo `/opt/astro/.env` pertenece a `root`, tiene permisos `600` y no se guarda en Git. El puerto se publica exclusivamente en `100.123.43.31:8000`, la IP privada de Tailscale.
+El archivo `/opt/astro/.env` pertenece a `root`, tiene permisos `600` y no se guarda en Git. El puerto 8000 se publica únicamente en `127.0.0.1` para el proxy HTTPS y en `100.123.43.31`, la IP privada de Tailscale; nunca en la interfaz pública.
 
 ### Estado y registros
 
@@ -51,6 +51,29 @@ cd /opt/astro
 docker compose restart astro
 docker compose ps
 ```
+
+## HTTPS privado
+
+Tailscale Serve publica la PWA solo dentro del tailnet y reenvía HTTPS al núcleo local:
+
+```text
+https://astro-vps.tailbee6db.ts.net/
+```
+
+Comprobación:
+
+```bash
+tailscale serve status
+curl http://127.0.0.1:8000/health
+```
+
+La configuración persistente se creó con:
+
+```bash
+tailscale serve --bg 8000
+```
+
+No debe sustituirse por Tailscale Funnel: Funnel haría el servicio accesible desde Internet. El nombre técnico del certificado aparece en los registros públicos de certificados, pero el contenido y el acceso continúan siendo privados.
 
 Antes de cada actualización se ejecutan las pruebas en el portátil. Después se copian únicamente los archivos versionados, se valida la configuración y se reconstruye el servicio:
 

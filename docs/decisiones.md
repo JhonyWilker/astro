@@ -108,3 +108,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Incorporar el iPhone al mismo tailnet que el portátil y el VPS, y acceder al cliente web mediante la IP privada estable `100.123.43.31`.
 - Motivo: Tailscale cifra el tráfico entre dispositivos y permite cambiar entre Wi‑Fi y datos móviles sin abrir puertos públicos.
 - Consecuencia: ASTRO solo responde a dispositivos autorizados del tailnet. Tailscale debe permanecer conectado en el iPhone; la conexión puede usar un repetidor cifrado cuando las redes no permiten un enlace directo, con algo más de latencia pero sin reducir el aislamiento.
+
+## 2026-09-25 · PWA privada con HTTPS de Tailscale
+
+- Contexto: iOS necesita un origen HTTPS para registrar el service worker y ejecutar ASTRO como una PWA real, pero el núcleo no debe hacerse público.
+- Decisión: Publicar la app mediante Tailscale Serve en `https://astro-vps.tailbee6db.ts.net/`, con proxy a `127.0.0.1:8000`, y no usar Tailscale Funnel. Cachear únicamente la carcasa estática de la PWA y mantener las conversaciones fuera del almacenamiento del navegador.
+- Motivo: Obtener HTTPS válido, WebSocket seguro e instalación en la pantalla de inicio sin abrir el servicio a Internet ni guardar datos privados en el dispositivo.
+- Consecuencia: El nombre técnico del certificado queda visible en los registros públicos de certificados, con autorización de Jhony, pero solo los dispositivos del tailnet pueden acceder. Tailscale debe estar conectado; una reconexión crea una sesión nueva hasta que exista memoria persistente.

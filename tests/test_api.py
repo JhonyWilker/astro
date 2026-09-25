@@ -49,7 +49,34 @@ def test_pagina_web() -> None:
 
     assert respuesta.status_code == 200
     assert "<title>ASTRO</title>" in respuesta.text
-    assert 'new WebSocket(`${protocolo}//${location.host}/ws`)' in respuesta.text
+    assert 'rel="manifest"' in respuesta.text
+    assert 'src="/static/app.js"' in respuesta.text
+
+
+def test_manifiesto_pwa() -> None:
+    with TestClient(crear_app(NucleoFalso())) as cliente:
+        respuesta = cliente.get("/manifest.webmanifest")
+
+    assert respuesta.status_code == 200
+    assert respuesta.json()["name"] == "ASTRO — Asistente personal"
+    assert respuesta.json()["display"] == "standalone"
+    assert respuesta.json()["start_url"] == "/"
+
+
+def test_recursos_pwa() -> None:
+    with TestClient(crear_app(NucleoFalso())) as cliente:
+        javascript = cliente.get("/static/app.js")
+        estilos = cliente.get("/static/app.css")
+        icono = cliente.get("/static/icon.svg")
+        service_worker = cliente.get("/service-worker.js")
+
+    assert javascript.status_code == 200
+    assert "new WebSocket" in javascript.text
+    assert "serviceWorker.register" in javascript.text
+    assert estilos.status_code == 200
+    assert icono.status_code == 200
+    assert service_worker.status_code == 200
+    assert service_worker.headers["service-worker-allowed"] == "/"
 
 
 def test_websocket_transmite_respuesta() -> None:

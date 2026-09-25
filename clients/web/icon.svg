@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ASTRO">
+  <defs>
+    <radialGradient id="fondo" cx="38%" cy="32%" r="78%">
+      <stop offset="0" stop-color="#12324a"/>
+      <stop offset="1" stop-color="#050b12"/>
+    </radialGradient>
+    <linearGradient id="luz" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#7dd3fc"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#fondo)"/>
+  <circle cx="256" cy="256" r="132" fill="none" stroke="#17384d" stroke-width="18"/>
+  <ellipse cx="256" cy="256" rx="178" ry="72" fill="none" stroke="url(#luz)" stroke-width="14" transform="rotate(-24 256 256)"/>
+  <circle cx="395" cy="177" r="18" fill="#e0f7ff"/>
+  <path d="M256 154 278 230 354 256 278 282 256 358 234 282 158 256 234 230Z" fill="url(#luz)"/>
+  <circle cx="256" cy="256" r="24" fill="#f0fbff"/>
+</svg>

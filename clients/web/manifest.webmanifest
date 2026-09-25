@@ -1,0 +1,21 @@
+{
+  "id": "/",
+  "name": "ASTRO — Asistente personal",
+  "short_name": "ASTRO",
+  "description": "Cliente privado para conversar con ASTRO.",
+  "lang": "es-ES",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050b12",
+  "theme_color": "#07131f",
+  "icons": [
+    {
+      "src": "/static/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
