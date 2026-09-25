@@ -125,7 +125,7 @@ Objetivo: tener el entorno instalado y la base de Python suficiente para entende
 | 1 | ✅ Definir ASTRO 0.1 en una página: qué hará y qué no | `docs/vision.md` escrito |
 | 2 | ✅ Inventario: PC, sistema operativo, móvil, red, dispositivos de casa | Lista en `docs/inventario.md` |
 | 3 | ✅ Instalar Python, VS Code y Git | `python --version` y `git --version` responden |
-| 4 | Crear cuenta de GitHub y repositorio privado `astro` | Primer commit subido |
+| 4 | ✅ Crear cuenta de GitHub y repositorio privado `astro` | Primer commit subido |
 | 5 | Python I: variables, funciones, condiciones, bucles | 5 ejercicios resueltos |
 | 6 | Python II: listas, diccionarios, archivos, JSON | Programa que guarda y lee un JSON |
 | 7 | Entornos virtuales y paquetes (venv, pip) | `requirements.txt` funcionando |
@@ -416,7 +416,7 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **4 — Crear cuenta de GitHub y repositorio privado `astro`.** Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **5 — Python I: variables, funciones, condiciones y bucles.** Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |
