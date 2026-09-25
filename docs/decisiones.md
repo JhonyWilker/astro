@@ -45,3 +45,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Añadir la fase 22e para crear una interfaz común y seleccionar proveedor y modelo desde la configuración, manteniendo OpenAI como proveedor inicial.
 - Motivo: Permitir que Jhony alterne entre proveedores compatibles sin modificar el núcleo de ASTRO.
 - Consecuencia: Solo podrán seleccionarse sin código los proveedores que tengan un adaptador implementado. Cada proveedor nuevo requerirá crear su adaptador una vez y guardar su clave exclusivamente en `.env`; la elección del segundo proveedor se hará en la fase 22e.
+
+## 2026-09-25 · Registro privado de uso y coste estimado
+
+- Contexto: ASTRO necesita mostrar cuánto consume cada petición y producir un informe diario sin guardar todavía conversaciones ni introducir una base de datos antes de la fase prevista.
+- Decisión: Guardar una línea JSON por petición en `logs/uso.jsonl` con fecha, modelo, nivel de servicio, tokens, tiempo y coste estimado. El archivo es local, está ignorado por Git y no contiene preguntas ni respuestas.
+- Motivo: Obtener datos reales de consumo y latencia con un formato sencillo, auditable y reemplazable cuando llegue la base de datos.
+- Consecuencia: El cálculo usa las tarifas por millón de tokens de `config/config.yaml` y fuerza el nivel estándar `default`. Los precios deben revisarse al cambiar de modelo o tarifa; la factura de OpenAI prevalece sobre la estimación local.

@@ -7,7 +7,7 @@ Cerebro de ASTRO: bucle principal, contexto y decisiones.
 `chat.py` mantiene una conversación en la terminal. Cada pregunta y respuesta se añade a una lista y se envía en el turno siguiente para conservar el contexto.
 
 ```powershell
-.\.venv\Scripts\python.exe .\core\chat.py
+.\.venv\Scripts\python.exe -m core.chat
 ```
 
 Escribe `salir` para terminar. El historial solo vive en memoria: al cerrar el programa desaparece. La memoria entre sesiones se añadirá en el bloque 3.
@@ -23,3 +23,15 @@ ASTRO muestra cada fragmento de texto en cuanto llega desde la API, sin esperar 
 ## Configuración central
 
 `chat.py` lee `config/config.yaml` al arrancar. El archivo decide el modelo, el idioma habitual, el máximo de tokens de salida y cuántos turnos se envían como contexto. Los valores se validan antes de realizar peticiones a la API.
+
+## Uso, coste y tiempo
+
+Cada petición terminada añade metadatos a `logs/uso.jsonl`: modelo, nivel de servicio, tokens, duración y coste estimado. No se guarda el contenido de la conversación.
+
+Tras cada respuesta aparece un resumen. El informe del día se muestra al salir o puede consultarse con:
+
+```powershell
+.\.venv\Scripts\python.exe -m core.uso
+```
+
+El coste es una estimación calculada con las tarifas de `config/config.yaml`; la factura de OpenAI es la referencia definitiva.

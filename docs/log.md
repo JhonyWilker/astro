@@ -109,3 +109,9 @@ Formato:
 - Falló: No hubo fallos técnicos. La captura de PowerShell volvió a representar incorrectamente algunos caracteres acentuados, sin afectar a las comparaciones Unicode, los archivos UTF-8 ni la respuesta de la API.
 - Decidido: La configuración inicial usa `gpt-6-astra`, español de España, un máximo de 2000 tokens de salida y 20 turnos de historial. `.env` queda reservado para secretos; cambiar valores operativos requiere editar `config/config.yaml` y reiniciar ASTRO, no modificar código.
 - Siguiente: fase 16 — Registro de tokens, coste y tiempo de respuesta.
+
+## 2026-09-25 · Fase 16 — Registro de tokens, coste y tiempo
+- Hecho: Se creó `core/uso.py` para calcular, guardar y resumir el uso de cada petición. El chat captura el evento final `response.completed`, registra tokens de entrada, caché, salida, razonamiento y total, mide la duración con un reloj monotónico y calcula el coste estimado con tarifas configurables. Los metadatos se añaden a `logs/uso.jsonl`, ignorado por Git y sin contenido de conversaciones. Una prueba determinista validó un coste conocido de 0,01345 USD; una petición real registró 472 tokens, 5,05 segundos y 0,008600 USD, y el informe diario reprodujo esos totales.
+- Falló: La primera inspección local usó un nombre de clase que el SDK no exporta y produjo `ImportError`; se revisaron los tipos instalados y se usaron los campos reales del evento. La captura de PowerShell mostró algunas tildes incorrectamente, sin afectar a los datos UTF-8.
+- Decidido: El coste se expresa en USD y se considera una estimación; la factura de OpenAI es la referencia definitiva. Las tarifas estándar de `gpt-6-astra` quedan en `config/config.yaml`, con `service_tier=default`, y deberán actualizarse al cambiar de modelo o precio. Los registros de uso nunca guardarán preguntas ni respuestas.
+- Siguiente: fase 17 — Manejo de errores, falta de conexión y reintentos.

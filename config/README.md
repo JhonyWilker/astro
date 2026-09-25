@@ -6,3 +6,5 @@ Configuración de ASTRO sin incluir claves ni contraseñas.
 - `personality.md`: identidad, trato, tono, criterio y reglas de privacidad que ASTRO recibe en cada respuesta.
 
 Los valores de `config.yaml` se leen al arrancar. Para cambiar el modelo, edita `modelo` y reinicia ASTRO; no es necesario modificar Python.
+
+Las tarifas de `precios_usd_por_millon` corresponden al modelo y nivel de servicio configurados. Deben revisarse al cambiar de modelo o cuando OpenAI actualice sus precios.

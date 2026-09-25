@@ -1,6 +1,13 @@
 modelo: gpt-6-astra
 idioma: español de España
+nivel_servicio: default
 
 limites:
   tokens_salida_maximos: 2000
   turnos_historial_maximos: 20
+
+precios_usd_por_millon:
+  entrada: 10.0
+  entrada_cache: 1.0
+  escritura_cache: 12.5
+  salida: 50.0
