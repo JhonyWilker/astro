@@ -34,17 +34,8 @@ from core.uso import (
     guardar_registro,
     resumir_registro,
 )
-from tools.calculadora import (
-    DEFINICION_HERRAMIENTA as DEFINICION_CALCULADORA,
-    NOMBRE_HERRAMIENTA as NOMBRE_CALCULADORA,
-    ErrorCalculo,
-    calcular,
-)
-from tools.fecha_hora import (
-    DEFINICION_HERRAMIENTA as DEFINICION_FECHA_HORA,
-    NOMBRE_HERRAMIENTA as NOMBRE_FECHA_HORA,
-    obtener_fecha_hora,
-)
+from tools.base import ContextoHerramienta, ErrorHerramienta
+from tools.registro import RegistroHerramientas
 
 RUTA_ENV = Path(__file__).resolve().parents[1] / ".env"
 RUTA_CONFIG = Path(__file__).resolve().parents[1] / "config" / "config.yaml"
@@ -256,6 +247,7 @@ def explicar_error(error: Exception) -> str:
 def ejecutar_stream(
     cliente: OpenAI,
     configuracion: Configuracion,
+    registro: RegistroHerramientas,
     instrucciones: str,
     entrada: list,
 ) -> tuple[Response, str, RegistroUso]:
@@ -267,7 +259,7 @@ def ejecutar_stream(
         input=entrada,
         max_output_tokens=configuracion.tokens_salida_maximos,
         service_tier=configuracion.nivel_servicio,
-        tools=[DEFINICION_FECHA_HORA, DEFINICION_CALCULADORA],
+        tools=registro.definiciones_api(),
         parallel_tool_calls=False,
         stream=True,
     )
@@ -312,6 +304,7 @@ def responder(
     historial: list[dict[str, str]],
     personalidad: str,
     configuracion: Configuracion,
+    registro: RegistroHerramientas,
 ) -> ResultadoRespuesta:
     instrucciones = (
         f"{personalidad}\n\n"
@@ -322,6 +315,7 @@ def responder(
     respuesta, texto_inicial, registro_inicial = ejecutar_stream(
         cliente,
         configuracion,
+        registro,
         instrucciones,
         historial_limitado,
     )
@@ -349,28 +343,22 @@ def responder(
         print()
         raise ErrorRespuestaASTRO() from error
 
-    if llamada.name == NOMBRE_FECHA_HORA:
-        if argumentos != {}:
-            print()
-            raise ErrorRespuestaASTRO()
-        resultado_herramienta = obtener_fecha_hora(
-            configuracion.zona_horaria
-        )
-    elif llamada.name == NOMBRE_CALCULADORA:
-        if (
-            not isinstance(argumentos, dict)
-            or set(argumentos) != {"expresion"}
-            or not isinstance(argumentos["expresion"], str)
-        ):
-            print()
-            raise ErrorRespuestaASTRO()
-        try:
-            resultado_herramienta = calcular(argumentos["expresion"])
-        except ErrorCalculo as error:
-            resultado_herramienta = {"error": str(error)}
-    else:
+    if not isinstance(argumentos, dict):
         print()
         raise ErrorRespuestaASTRO()
+
+    contexto = ContextoHerramienta(
+        zona_horaria=configuracion.zona_horaria
+    )
+    try:
+        resultado_herramienta = registro.ejecutar(
+            llamada.name,
+            argumentos,
+            contexto,
+        )
+    except ErrorHerramienta as error:
+        print()
+        raise ErrorRespuestaASTRO() from error
     entrada_continuacion = [
         *historial_limitado,
         *respuesta.output,
@@ -386,6 +374,7 @@ def responder(
     respuesta_final, texto_final, registro_final = ejecutar_stream(
         cliente,
         configuracion,
+        registro,
         instrucciones,
         entrada_continuacion,
     )
@@ -408,6 +397,7 @@ def main() -> None:
     configuracion = cargar_configuracion()
     cliente = crear_cliente(configuracion)
     personalidad = cargar_personalidad()
+    registro = RegistroHerramientas.descubrir()
     historial: list[dict[str, str]] = []
     print("ASTRO: Escribe 'salir' para terminar la conversación.")
 
@@ -432,6 +422,7 @@ def main() -> None:
                 historial,
                 personalidad,
                 configuracion,
+                registro,
             )
         except (APIError, ErrorRespuestaASTRO) as error:
             historial.pop()

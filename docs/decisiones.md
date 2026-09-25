@@ -73,3 +73,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Resolver expresiones mediante un recorrido limitado del árbol `ast`, usando `Fraction` y `Decimal`, sin `eval`.
 - Motivo: Obtener resultados reproducibles y exactos mientras se impide el acceso a nombres, funciones, archivos u otras capacidades de Python.
 - Consecuencia: Solo se aceptan los operadores aritméticos documentados y se limitan longitud, exponentes y tamaño del resultado. Las operaciones no permitidas producen un error controlado.
+
+## 2026-09-25 · Registro desacoplado de herramientas
+
+- Contexto: El núcleo importaba y ejecutaba cada herramienta por nombre, de modo que añadir una nueva exigía modificar `core/chat.py`.
+- Decisión: Cada archivo de herramienta exportará una ficha `HERRAMIENTA` con nombre, descripción, parámetros, riesgo y ejecutor; un registro la descubrirá automáticamente al arrancar.
+- Motivo: Mantener el cerebro independiente de herramientas concretas y convertir cada incorporación en un cambio localizado y verificable.
+- Consecuencia: Un archivo de herramienta incompleto o un nombre duplicado impiden el arranque con un error claro. Los niveles bajo, medio y alto quedan disponibles como metadatos, pero su política de autorización se implementará en la fase 53.

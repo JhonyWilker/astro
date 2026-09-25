@@ -133,3 +133,9 @@ Formato:
 - Falló: No hubo fallos de implementación ni de prueba. La captura de PowerShell mostró algunas tildes incorrectamente, sin afectar al código UTF-8 ni a las aserciones.
 - Decidido: Los cálculos nunca usarán `eval` ni se dejarán al cálculo mental del modelo. La calculadora acepta solo un subconjunto aritmético explícito, limita entrada, exponentes y tamaño de resultado y conserva fracciones exactas. Durante esta fase se mantiene una sola llamada de herramienta por turno.
 - Siguiente: fase 20 — Registro genérico de herramientas.
+
+## 2026-09-25 · Fase 20 — Registro genérico de herramientas
+- Hecho: Se crearon `tools/base.py` y `tools/registro.py`. Cada herramienta declara en una ficha común su nombre, descripción, esquema de parámetros, riesgo y ejecutor. El registro descubre automáticamente los módulos de `tools`, rechaza nombres duplicados o archivos incompletos, genera los contratos para la API y ejecuta por nombre con una interfaz común. Fecha/hora y calculadora se adaptaron al formato con riesgo bajo, y `core/chat.py` dejó de importarlas o conocer sus nombres. Las pruebas confirmaron descubrimiento, metadatos, ejecución, errores controlados y ausencia de acoplamiento; una simulación validó el chat y una consulta real respondió la hora de Madrid.
+- Falló: No hubo fallos de implementación ni de prueba. La captura de PowerShell mostró algunas tildes incorrectamente, sin afectar a los archivos UTF-8 ni a las comprobaciones.
+- Decidido: Añadir una herramienta requiere un único archivo que exporte `HERRAMIENTA`; el núcleo y el registro no se editan. Los riesgos disponibles son bajo, medio y alto. Por ahora son metadatos; las reglas de autorización `AUTO`, `ASK` y `DENY` pertenecen a la fase 53.
+- Siguiente: fase 21 — Bucle de agente.

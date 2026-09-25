@@ -49,3 +49,7 @@ Cuando una pregunta depende de la fecha o la hora actuales, el modelo solicita `
 ## Calculadora
 
 Cuando Jhony pide un cálculo, el modelo solicita `calcular` con una expresión. Python acepta solo números, paréntesis y operadores aritméticos, conserva enteros y fracciones exactos y devuelve también una representación decimal. No se usa `eval` ni se permite ejecutar código.
+
+## Registro de herramientas
+
+`tools/registro.py` descubre automáticamente los archivos de herramientas y ofrece sus contratos a la API. El cerebro ejecuta cualquier herramienta registrada mediante la misma interfaz, sin importar su nombre concreto. Cada ficha incluye nombre, descripción, parámetros y riesgo.

@@ -2,38 +2,19 @@ import ast
 from decimal import Decimal, localcontext
 from fractions import Fraction
 
-NOMBRE_HERRAMIENTA = "calcular"
-
-DEFINICION_HERRAMIENTA = {
-    "type": "function",
-    "name": NOMBRE_HERRAMIENTA,
-    "description": (
-        "Calcula con exactitud una expresión aritmética. Úsala siempre "
-        "que Jhony pida un cálculo, aunque parezca sencillo."
-    ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "expresion": {
-                "type": "string",
-                "description": (
-                    "Expresión con números, paréntesis y operadores "
-                    "+, -, *, /, //, %, **."
-                ),
-            }
-        },
-        "required": ["expresion"],
-        "additionalProperties": False,
-    },
-    "strict": True,
-}
+from tools.base import (
+    ContextoHerramienta,
+    ErrorHerramienta,
+    Herramienta,
+    Riesgo,
+)
 
 LONGITUD_MAXIMA = 200
 EXPONENTE_MAXIMO = 100
 BITS_MAXIMOS = 4096
 
 
-class ErrorCalculo(ValueError):
+class ErrorCalculo(ErrorHerramienta):
     pass
 
 
@@ -141,3 +122,43 @@ def calcular(expresion: str) -> dict[str, str]:
         "resultado_exacto": exacto,
         "resultado_decimal": representar_decimal(resultado),
     }
+
+
+def ejecutar(
+    argumentos: dict[str, object],
+    contexto: ContextoHerramienta,
+) -> dict[str, object]:
+    expresion = argumentos.get("expresion")
+    if set(argumentos) != {"expresion"} or not isinstance(
+        expresion,
+        str,
+    ):
+        raise ErrorHerramienta(
+            "La calculadora requiere una expresión de texto"
+        )
+    return calcular(expresion)
+
+
+HERRAMIENTA = Herramienta(
+    nombre="calcular",
+    descripcion=(
+        "Calcula con exactitud una expresión aritmética. Úsala siempre "
+        "que Jhony pida un cálculo, aunque parezca sencillo."
+    ),
+    parametros={
+        "type": "object",
+        "properties": {
+            "expresion": {
+                "type": "string",
+                "description": (
+                    "Expresión con números, paréntesis y operadores "
+                    "+, -, *, /, //, %, **."
+                ),
+            }
+        },
+        "required": ["expresion"],
+        "additionalProperties": False,
+    },
+    riesgo=Riesgo.BAJO,
+    ejecutor=ejecutar,
+)

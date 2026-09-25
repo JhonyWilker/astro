@@ -1,24 +1,12 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-NOMBRE_HERRAMIENTA = "obtener_fecha_hora"
-
-DEFINICION_HERRAMIENTA = {
-    "type": "function",
-    "name": NOMBRE_HERRAMIENTA,
-    "description": (
-        "Devuelve la fecha y hora actuales en la zona horaria configurada "
-        "de Jhony. Úsala siempre que la respuesta dependa de la fecha, "
-        "el día de la semana o la hora actuales."
-    ),
-    "parameters": {
-        "type": "object",
-        "properties": {},
-        "required": [],
-        "additionalProperties": False,
-    },
-    "strict": True,
-}
+from tools.base import (
+    ContextoHerramienta,
+    ErrorHerramienta,
+    Herramienta,
+    Riesgo,
+)
 
 DIAS_SEMANA = (
     "lunes",
@@ -70,3 +58,32 @@ def obtener_fecha_hora(
         "zona_horaria": zona_horaria,
         "desfase_utc": desfase_con_dos_puntos,
     }
+
+
+def ejecutar(
+    argumentos: dict[str, object],
+    contexto: ContextoHerramienta,
+) -> dict[str, object]:
+    if argumentos != {}:
+        raise ErrorHerramienta(
+            "La herramienta de fecha y hora no acepta parámetros"
+        )
+    return obtener_fecha_hora(contexto.zona_horaria)
+
+
+HERRAMIENTA = Herramienta(
+    nombre="obtener_fecha_hora",
+    descripcion=(
+        "Devuelve la fecha y hora actuales en la zona horaria configurada "
+        "de Jhony. Úsala siempre que la respuesta dependa de la fecha, "
+        "el día de la semana o la hora actuales."
+    ),
+    parametros={
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": False,
+    },
+    riesgo=Riesgo.BAJO,
+    ejecutor=ejecutar,
+)
