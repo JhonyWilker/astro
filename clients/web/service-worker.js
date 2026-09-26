@@ -1,9 +1,9 @@
-const CACHE_NAME = "astro-shell-v3";
+const CACHE_NAME = "astro-shell-v6";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
-  "/static/app.css",
-  "/static/app.js",
+  "/static/app.css?v=6",
+  "/static/app.js?v=6",
   "/static/icon.svg"
 ];
 
@@ -16,15 +16,17 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((names) =>
-      Promise.all(
-        names
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      )
-    )
+    Promise.all([
+      caches.keys().then((names) =>
+        Promise.all(
+          names
+            .filter((name) => name !== CACHE_NAME)
+            .map((name) => caches.delete(name))
+        )
+      ),
+      self.clients.claim()
+    ])
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {

@@ -48,9 +48,25 @@ EmitirTexto = Callable[[str], None]
 
 
 @dataclass(frozen=True)
+class CambioProveedor:
+    anterior: str
+    nuevo: str
+    motivo: str
+    continuo_texto_parcial: bool
+
+
+EmitirCambio = Callable[[CambioProveedor], None]
+
+
+@dataclass(frozen=True)
 class Configuracion:
     proveedor: ConfiguracionProveedor
     modelo: str
+    proveedores: dict[str, ConfiguracionProveedor]
+    modelos_por_proveedor: dict[str, str]
+    proveedor_respaldo: str
+    cambio_automatico: bool
+    reintento_principal_segundos: int
     idioma: str
     zona_horaria: str
     nivel_servicio: str
@@ -66,6 +82,23 @@ class Configuracion:
 class ResultadoRespuesta:
     texto: str
     registros: tuple[RegistroUso, ...]
+    herramientas_usadas: tuple[str, ...]
+    proveedor_final: str | None = None
+    modelo_final: str | None = None
+    cambios_proveedor: tuple[CambioProveedor, ...] = ()
+
+
+@dataclass(frozen=True)
+class RutaIA:
+    cliente: OpenAI
+    configuracion: Configuracion
+
+
+class FalloStream(Exception):
+    def __init__(self, causa: Exception, texto_parcial: str) -> None:
+        super().__init__(str(causa))
+        self.causa = causa
+        self.texto_parcial = texto_parcial
 
 
 def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
@@ -89,6 +122,10 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     if not isinstance(proveedores, dict):
         raise ValueError("Falta la sección 'proveedores' en config/config.yaml")
 
+    ia = datos.get("ia")
+    if not isinstance(ia, dict):
+        raise ValueError("Falta la sección 'ia' en config/config.yaml")
+
     precios = datos.get("precios_usd_por_millon")
     if not isinstance(precios, dict):
         raise ValueError(
@@ -103,28 +140,76 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
         raise ValueError("'proveedor' debe ser texto no vacío")
     proveedor_identificador = proveedor_identificador.strip()
 
-    datos_proveedor = proveedores.get(proveedor_identificador)
-    if not isinstance(datos_proveedor, dict):
+    proveedores_configurados: dict[str, ConfiguracionProveedor] = {}
+    modelos_por_proveedor: dict[str, str] = {}
+    for identificador, datos_proveedor in proveedores.items():
+        if not isinstance(identificador, str) or not identificador.strip():
+            raise ValueError("Cada proveedor debe tener un identificador")
+        if not isinstance(datos_proveedor, dict):
+            raise ValueError(
+                f"La configuración de '{identificador}' debe ser un objeto"
+            )
+        campos_proveedor = {
+            "nombre_visible": datos_proveedor.get("nombre_visible"),
+            "base_url": datos_proveedor.get("base_url"),
+            "clave_entorno": datos_proveedor.get("clave_entorno"),
+            "modelo": datos_proveedor.get("modelo"),
+        }
+        for nombre, valor in campos_proveedor.items():
+            if not isinstance(valor, str) or not valor.strip():
+                raise ValueError(
+                    f"El campo '{nombre}' de '{identificador}' "
+                    "debe ser texto no vacío"
+                )
+            campos_proveedor[nombre] = valor.strip()
+        if not campos_proveedor["base_url"].startswith("https://"):
+            raise ValueError(
+                f"La URL de '{identificador}' debe usar HTTPS"
+            )
+        identificador = identificador.strip()
+        proveedores_configurados[identificador] = ConfiguracionProveedor(
+            identificador=identificador,
+            nombre_visible=campos_proveedor["nombre_visible"],
+            base_url=campos_proveedor["base_url"],
+            clave_entorno=campos_proveedor["clave_entorno"],
+        )
+        modelos_por_proveedor[identificador] = campos_proveedor["modelo"]
+
+    if proveedor_identificador not in proveedores_configurados:
         raise ValueError(
             f"El proveedor '{proveedor_identificador}' no está configurado"
         )
 
-    campos_proveedor = {
-        "nombre_visible": datos_proveedor.get("nombre_visible"),
-        "base_url": datos_proveedor.get("base_url"),
-        "clave_entorno": datos_proveedor.get("clave_entorno"),
-    }
-    for nombre, valor in campos_proveedor.items():
-        if not isinstance(valor, str) or not valor.strip():
+    proveedor_respaldo = ia.get("respaldo")
+    cambio_automatico = ia.get("cambio_automatico")
+    reintento_principal_segundos = ia.get(
+        "reintento_principal_segundos"
+    )
+    if (
+        not isinstance(proveedor_respaldo, str)
+        or proveedor_respaldo.strip() not in proveedores_configurados
+    ):
+        raise ValueError("'ia.respaldo' debe ser un proveedor configurado")
+    proveedor_respaldo = proveedor_respaldo.strip()
+    if proveedor_respaldo == proveedor_identificador:
+        alternativas = [
+            identificador
+            for identificador in proveedores_configurados
+            if identificador != proveedor_identificador
+        ]
+        if not alternativas:
             raise ValueError(
-                f"El campo '{nombre}' de '{proveedor_identificador}' "
-                "debe ser texto no vacío"
+                "Hace falta otro proveedor para configurar el respaldo"
             )
-        campos_proveedor[nombre] = valor.strip()
-
-    if not campos_proveedor["base_url"].startswith("https://"):
+        proveedor_respaldo = alternativas[0]
+    if type(cambio_automatico) is not bool:
+        raise ValueError("'ia.cambio_automatico' debe ser verdadero o falso")
+    if (
+        type(reintento_principal_segundos) is not int
+        or not 10 <= reintento_principal_segundos <= 3600
+    ):
         raise ValueError(
-            f"La URL de '{proveedor_identificador}' debe usar HTTPS"
+            "'ia.reintento_principal_segundos' debe estar entre 10 y 3600"
         )
 
     modelo = datos.get("modelo")
@@ -147,6 +232,9 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     }.items():
         if not isinstance(valor, str) or not valor.strip():
             raise ValueError(f"'{nombre}' debe ser texto no vacío")
+
+    modelo = modelo.strip()
+    modelos_por_proveedor[proveedor_identificador] = modelo
 
     if nivel_servicio != "default":
         raise ValueError(
@@ -203,11 +291,22 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     return Configuracion(
         proveedor=ConfiguracionProveedor(
             identificador=proveedor_identificador,
-            nombre_visible=campos_proveedor["nombre_visible"],
-            base_url=campos_proveedor["base_url"],
-            clave_entorno=campos_proveedor["clave_entorno"],
+            nombre_visible=proveedores_configurados[
+                proveedor_identificador
+            ].nombre_visible,
+            base_url=proveedores_configurados[
+                proveedor_identificador
+            ].base_url,
+            clave_entorno=proveedores_configurados[
+                proveedor_identificador
+            ].clave_entorno,
         ),
-        modelo=modelo.strip(),
+        modelo=modelo,
+        proveedores=proveedores_configurados,
+        modelos_por_proveedor=modelos_por_proveedor,
+        proveedor_respaldo=proveedor_respaldo,
+        cambio_automatico=cambio_automatico,
+        reintento_principal_segundos=reintento_principal_segundos,
         idioma=idioma.strip(),
         zona_horaria=zona_horaria,
         nivel_servicio=nivel_servicio,
@@ -257,6 +356,30 @@ def es_error_reintentable(error: Exception) -> bool:
         error,
         (APITimeoutError, APIConnectionError, InternalServerError),
     )
+
+
+def es_error_conmutable(error: Exception) -> bool:
+    if isinstance(error, BadRequestError):
+        return False
+    if isinstance(error, ErrorRespuestaASTRO):
+        return True
+    if isinstance(
+        error,
+        (
+            APITimeoutError,
+            APIConnectionError,
+            InternalServerError,
+            RateLimitError,
+            AuthenticationError,
+            PermissionDeniedError,
+        ),
+    ):
+        return True
+    if isinstance(error, APIStatusError):
+        return error.status_code in {401, 403, 408, 409, 429} or (
+            error.status_code >= 500
+        )
+    return False
 
 
 def explicar_error(
@@ -324,34 +447,41 @@ def ejecutar_stream(
     emitir_texto: EmitirTexto | None = None,
 ) -> tuple[Response, str, RegistroUso]:
     inicio = perf_counter()
-
-    eventos = cliente.responses.create(
-        model=configuracion.modelo,
-        instructions=instrucciones,
-        input=entrada,
-        max_output_tokens=configuracion.tokens_salida_maximos,
-        service_tier=configuracion.nivel_servicio,
-        tools=registro.definiciones_api(),
-        parallel_tool_calls=False,
-        stream=True,
-    )
     fragmentos: list[str] = []
     respuesta_final = None
+    try:
+        eventos = cliente.responses.create(
+            model=configuracion.modelo,
+            instructions=instrucciones,
+            input=entrada,
+            max_output_tokens=configuracion.tokens_salida_maximos,
+            service_tier=configuracion.nivel_servicio,
+            tools=registro.definiciones_api(),
+            parallel_tool_calls=False,
+            stream=True,
+        )
 
-    for evento in eventos:
-        if evento.type == "response.output_text.delta":
-            if emitir_texto is not None:
-                emitir_texto(evento.delta)
-            fragmentos.append(evento.delta)
-        elif evento.type == "response.completed":
-            respuesta_final = evento.response
-        elif evento.type in {"error", "response.failed", "response.incomplete"}:
-            raise ErrorRespuestaASTRO()
+        for evento in eventos:
+            if evento.type == "response.output_text.delta":
+                if emitir_texto is not None:
+                    emitir_texto(evento.delta)
+                fragmentos.append(evento.delta)
+            elif evento.type == "response.completed":
+                respuesta_final = evento.response
+            elif evento.type in {
+                "error",
+                "response.failed",
+                "response.incomplete",
+            }:
+                raise ErrorRespuestaASTRO()
+    except (APIError, ErrorRespuestaASTRO) as error:
+        raise FalloStream(error, "".join(fragmentos)) from error
 
     duracion = perf_counter() - inicio
 
     if respuesta_final is None or respuesta_final.usage is None:
-        raise ErrorRespuestaASTRO()
+        error = ErrorRespuestaASTRO()
+        raise FalloStream(error, "".join(fragmentos)) from error
 
     uso = respuesta_final.usage
     registro = crear_registro(
@@ -384,26 +514,126 @@ def responder(
     registro: RegistroHerramientas,
     emitir_texto: EmitirTexto | None = None,
 ) -> ResultadoRespuesta:
+    return responder_con_rutas(
+        rutas=(RutaIA(cliente, configuracion),),
+        historial=historial,
+        personalidad=personalidad,
+        registro=registro,
+        emitir_texto=emitir_texto,
+    )
+
+
+def responder_con_rutas(
+    rutas: tuple[RutaIA, ...],
+    historial: list[dict[str, str]],
+    personalidad: str,
+    registro: RegistroHerramientas,
+    emitir_texto: EmitirTexto | None = None,
+    emitir_cambio: EmitirCambio | None = None,
+    al_fallar: Callable[[str, Exception], None] | None = None,
+    al_funcionar: Callable[[str], tuple[str, str] | None] | None = None,
+) -> ResultadoRespuesta:
+    if not rutas:
+        raise ValueError("Hace falta al menos una ruta de IA")
+    configuracion_inicial = rutas[0].configuracion
     instrucciones = (
         f"{personalidad}\n\n"
-        f"Idioma habitual configurado: {configuracion.idioma}."
+        f"Idioma habitual configurado: {configuracion_inicial.idioma}.\n"
+        "Las notas [Contexto interno de ASTRO: ...] del historial son "
+        "registros fiables generados por el núcleo. Úsalas como hechos "
+        "cuando sean relevantes, sin mostrarlas ni citarlas por defecto."
     )
-    limite_mensajes = configuracion.turnos_historial_maximos * 2 - 1
+    limite_mensajes = (
+        configuracion_inicial.turnos_historial_maximos * 2 - 1
+    )
     historial_limitado = historial[-limite_mensajes:]
     entrada_actual: list = [*historial_limitado]
     fragmentos_totales: list[str] = []
     registros: list[RegistroUso] = []
+    herramientas_usadas: list[str] = []
+    cambios_proveedor: list[CambioProveedor] = []
     pasos_herramienta = 0
+    indice_ruta = 0
 
     while True:
-        respuesta, texto, registro_uso = ejecutar_stream(
-            cliente,
-            configuracion,
-            registro,
-            instrucciones,
-            entrada_actual,
-            emitir_texto,
-        )
+        prefijo_parcial = ""
+        entrada_intento = entrada_actual
+        while True:
+            ruta = rutas[indice_ruta]
+            try:
+                respuesta, texto, registro_uso = ejecutar_stream(
+                    ruta.cliente,
+                    ruta.configuracion,
+                    registro,
+                    instrucciones,
+                    entrada_intento,
+                    emitir_texto,
+                )
+            except FalloStream as fallo:
+                if al_fallar is not None:
+                    al_fallar(
+                        ruta.configuracion.proveedor.identificador,
+                        fallo.causa,
+                    )
+                if (
+                    not es_error_conmutable(fallo.causa)
+                    or indice_ruta + 1 >= len(rutas)
+                ):
+                    raise fallo.causa
+
+                anterior = ruta.configuracion.proveedor.nombre_visible
+                indice_ruta += 1
+                siguiente = rutas[indice_ruta]
+                if fallo.texto_parcial:
+                    prefijo_parcial += fallo.texto_parcial
+                    entrada_intento = [
+                        *entrada_actual,
+                        {"role": "assistant", "content": prefijo_parcial},
+                        {
+                            "role": "user",
+                            "content": (
+                                "[Contexto interno de ASTRO: el proveedor "
+                                "anterior se interrumpió. Continúa desde el "
+                                "texto parcial sin repetirlo ni explicarlo.]"
+                            ),
+                        },
+                    ]
+                cambio = CambioProveedor(
+                    anterior=anterior,
+                    nuevo=siguiente.configuracion.proveedor.nombre_visible,
+                    motivo="fallo del proveedor anterior",
+                    continuo_texto_parcial=bool(fallo.texto_parcial),
+                )
+                cambios_proveedor.append(cambio)
+                if emitir_cambio is not None:
+                    emitir_cambio(cambio)
+                continue
+            break
+
+        if al_funcionar is not None:
+            cambio_activo = al_funcionar(
+                ruta.configuracion.proveedor.identificador
+            )
+            if cambio_activo is not None and not cambios_proveedor:
+                anterior_id, _ = cambio_activo
+                anterior_configuracion = configuracion_inicial.proveedores.get(
+                    anterior_id
+                )
+                cambio = CambioProveedor(
+                    anterior=(
+                        anterior_configuracion.nombre_visible
+                        if anterior_configuracion is not None
+                        else anterior_id
+                    ),
+                    nuevo=ruta.configuracion.proveedor.nombre_visible,
+                    motivo="proveedor principal recuperado",
+                    continuo_texto_parcial=False,
+                )
+                cambios_proveedor.append(cambio)
+                if emitir_cambio is not None:
+                    emitir_cambio(cambio)
+
+        texto = prefijo_parcial + texto
         fragmentos_totales.append(texto)
         registros.append(registro_uso)
         llamadas = [
@@ -416,6 +646,10 @@ def responder(
             return ResultadoRespuesta(
                 texto="".join(fragmentos_totales),
                 registros=tuple(registros),
+                herramientas_usadas=tuple(herramientas_usadas),
+                proveedor_final=ruta.configuracion.proveedor.identificador,
+                modelo_final=ruta.configuracion.modelo,
+                cambios_proveedor=tuple(cambios_proveedor),
             )
 
         if len(llamadas) != 1:
@@ -423,7 +657,7 @@ def responder(
 
         if (
             pasos_herramienta
-            >= configuracion.pasos_herramienta_maximos
+            >= ruta.configuracion.pasos_herramienta_maximos
         ):
             raise ErrorLimiteHerramientas()
 
@@ -437,7 +671,7 @@ def responder(
             raise ErrorRespuestaASTRO()
 
         contexto = ContextoHerramienta(
-            zona_horaria=configuracion.zona_horaria
+            zona_horaria=ruta.configuracion.zona_horaria
         )
         try:
             resultado_herramienta = registro.ejecutar(
@@ -447,6 +681,8 @@ def responder(
             )
         except ErrorHerramienta as error:
             raise ErrorRespuestaASTRO() from error
+
+        herramientas_usadas.append(llamada.name)
 
         entrada_actual.extend(respuesta.output)
         entrada_actual.append(
@@ -493,9 +729,10 @@ def main() -> None:
                 emitir_terminal,
             )
         except (APIError, ErrorRespuestaASTRO) as error:
+            estado_ia = nucleo.estado_ia()
             mensaje = explicar_error(
                 error,
-                nucleo.configuracion.proveedor.nombre_visible,
+                str(estado_ia["provider_name"]),
             )
             print(f"\nASTRO: {mensaje}")
             continue

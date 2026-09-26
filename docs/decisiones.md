@@ -129,3 +129,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Definir los proveedores compatibles en `config/config.yaml`, guardar cada clave en una variable distinta de `.env` y crear el cliente mediante una fábrica común. Configurar OpenAI como predeterminado y OpenRouter como alternativa seleccionable con `proveedor` y `modelo`.
 - Motivo: Desacoplar el núcleo del servicio elegido y permitir pruebas o cambios operativos mediante configuración.
 - Consecuencia: ASTRO nunca cambia de proveedor automáticamente ni duplica peticiones. Tras modificar el YAML hay que reiniciar el servicio. El registro de uso y el panel identifican el proveedor activo; al usar OpenRouter, las conversaciones pasan por OpenRouter y por el proveedor que sirve el modelo.
+
+## 2026-09-27 · Enrutamiento seguro entre proveedores
+
+- Contexto: El selector por YAML cumplía el cambio sin código, pero Jhony necesita controlarlo desde la PWA y mantener ASTRO disponible si el proveedor principal falla.
+- Decisión: Mantener un principal y un respaldo configurables, persistir la selección fuera de Git y usar un circuit breaker de 120 segundos. El respaldo recibe el historial propio de ASTRO, el texto parcial visible y los resultados de herramientas completadas; el principal solo recupera el servicio al comenzar un turno posterior y superar una petición real.
+- Motivo: Conservar continuidad y disponibilidad sin fingir que dos modelos comparten estado interno ni duplicar herramientas.
+- Consecuencia: La continuación después de un corte puede reformular o repetir una pequeña parte, aunque ASTRO le pide que continúe desde el fragmento recibido. Las herramientas terminadas no se ejecutan de nuevo por un fallo posterior del proveedor. Las acciones externas de riesgo requerirán idempotencia y confirmación en sus fases correspondientes.

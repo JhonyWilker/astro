@@ -136,7 +136,7 @@ Objetivo: tener el entorno instalado y la base de Python suficiente para entende
 
 **Puerta del bloque 0:** un script de 10 líneas, escrito y entendido por Jhony, que envía una pregunta al modelo y muestra la respuesta.
 
-## Bloque 1 — Cerebro en texto y app web (fases 11–22e)
+## Bloque 1 — Cerebro en texto y app web (fases 11–22f)
 
 Objetivo: el núcleo de ASTRO conversa por texto con personalidad propia, usa herramientas y registra coste y errores. Duración estimada: 3–4 semanas.
 
@@ -159,6 +159,7 @@ Objetivo: el núcleo de ASTRO conversa por texto con personalidad propia, usa he
 | 22c | ✅ App web propia (PWA): chat de texto con ASTRO, sin Telegram ni apps de terceros | Instalada en la pantalla de inicio del iPhone, conversación completa |
 | 22d | ✅ App web: panel de estado y notificaciones push | Aviso de prueba recibido con la app cerrada |
 | 22e | ✅ Proveedores de IA intercambiables: elegir proveedor y modelo desde la configuración | Cambiar entre dos proveedores configurados sin tocar código |
+| 22f | ✅ Selector de proveedor y modelo en la PWA, con respaldo y retorno automático seguros | Cambiar proveedor desde «Estado»; una caída usa el respaldo sin repetir acciones y el principal recuperado vuelve en el siguiente turno |
 
 Desde la 22a el cerebro vive en el VPS: programas en el PC, despliegas en el VPS y la app web funciona 24/7 con el PC apagado.
 
@@ -422,7 +423,7 @@ Fase actual: **Puerta del bloque 1 — conversación completa desde el iPhone.**
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |
 | 0 — Preparación | 1–10 | Primer script con el modelo | Completado |
-| 1 — Cerebro en texto y app web | 11–22e | Conversación con herramientas, también desde el iPhone | En curso |
+| 1 — Cerebro en texto y app web | 11–22f | Conversación con herramientas, también desde el iPhone | En curso |
 | 2 — Voz | 23–38 | ASTRO 0.1 por voz | Pendiente |
 | 3 — Memoria | 39–52 | Recuerda durante semanas | Pendiente |
 | 4 — Herramientas personales | 53–66 | Email y calendario por voz | Pendiente |

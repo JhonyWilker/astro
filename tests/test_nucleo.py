@@ -1,4 +1,5 @@
 from copy import deepcopy
+from dataclasses import replace
 from types import SimpleNamespace
 import json
 
@@ -6,6 +7,7 @@ import pytest
 from openai import APIConnectionError
 
 import core.chat as chat
+import core.sesion as sesion
 from core.errores import ErrorLimiteHerramientas
 from core.uso import Tarifas, calcular_coste_estimado
 from tools.registro import RegistroHerramientas
@@ -81,6 +83,59 @@ class APIFalsa:
         return iter(eventos)
 
 
+class APIMixta(APIFalsa):
+    def create(self, **opciones):
+        self.llamadas.append(deepcopy(opciones))
+        respuesta = self.respuestas.pop(0)
+        if respuesta == "fallo":
+            return iter([SimpleNamespace(type="error")])
+        eventos = []
+        if not any(
+            elemento.type == "function_call"
+            for elemento in respuesta.output
+        ):
+            eventos.append(
+                SimpleNamespace(
+                    type="response.output_text.delta",
+                    delta="Continuación segura.",
+                )
+            )
+        eventos.append(
+            SimpleNamespace(
+                type="response.completed",
+                response=respuesta,
+            )
+        )
+        return iter(eventos)
+
+
+class APIFalloParcial(APIFalsa):
+    def create(self, **opciones):
+        self.llamadas.append(deepcopy(opciones))
+        return iter(
+            [
+                SimpleNamespace(
+                    type="response.output_text.delta",
+                    delta="Texto parcial. ",
+                ),
+                SimpleNamespace(type="error"),
+            ]
+        )
+
+
+class RegistroContador:
+    def __init__(self) -> None:
+        self.real = RegistroHerramientas.descubrir()
+        self.ejecuciones = 0
+
+    def definiciones_api(self):
+        return self.real.definiciones_api()
+
+    def ejecutar(self, nombre, argumentos, contexto):
+        self.ejecuciones += 1
+        return self.real.ejecutar(nombre, argumentos, contexto)
+
+
 def test_calcular_coste_estimado() -> None:
     tarifas = Tarifas(
         entrada_usd_millon=10,
@@ -153,6 +208,11 @@ def test_bucle_agente_encadena_tres_herramientas(
     capsys.readouterr()
     assert resultado.texto == "Resultado final: 4072."
     assert len(resultado.registros) == 4
+    assert resultado.herramientas_usadas == (
+        "obtener_fecha_hora",
+        "calcular",
+        "calcular",
+    )
     assert all(
         registro.proveedor == "openai"
         for registro in resultado.registros
@@ -162,7 +222,131 @@ def test_bucle_agente_encadena_tres_herramientas(
         for registro in resultado.registros
     )
     assert len(api.llamadas) == 4
+    assert "registros fiables generados por el núcleo" in (
+        api.llamadas[-1]["instructions"]
+    )
     salida_final = json.loads(
         api.llamadas[-1]["input"][-1]["output"]
     )
     assert salida_final["resultado_exacto"] == "4072"
+
+
+def test_sesion_conserva_herramientas_en_contexto_interno(
+    monkeypatch,
+) -> None:
+    resultado = chat.ResultadoRespuesta(
+        texto="El resultado es 42.",
+        registros=(),
+        herramientas_usadas=("calcular",),
+    )
+    monkeypatch.setattr(
+        sesion,
+        "responder_con_rutas",
+        lambda *args: resultado,
+    )
+    nucleo = SimpleNamespace(
+        rutas_para_turno=lambda: (
+            chat.RutaIA(
+                SimpleNamespace(),
+                chat.cargar_configuracion(),
+            ),
+        ),
+        personalidad="Personalidad de prueba",
+        registro=RegistroHerramientas.descubrir(),
+        registrar_fallo=lambda proveedor, error: None,
+        registrar_exito=lambda proveedor: None,
+    )
+    instancia = sesion.SesionASTRO(
+        nucleo=nucleo,
+    )
+
+    respuesta = instancia.preguntar("Calcula 40 + 2")
+
+    assert respuesta is resultado
+    assert instancia.historial[0] == {
+        "role": "user",
+        "content": "Calcula 40 + 2",
+    }
+    assert instancia.historial[1]["content"].startswith(
+        "El resultado es 42."
+    )
+    assert "herramientas usadas en este turno: calcular" in (
+        instancia.historial[1]["content"]
+    )
+
+
+def test_respaldo_continua_texto_parcial(monkeypatch) -> None:
+    principal = APIFalloParcial([])
+    respaldo = APIMixta([respuesta_final()])
+    configuracion = chat.cargar_configuracion()
+    configuracion_respaldo = replace(
+        configuracion,
+        proveedor=configuracion.proveedores["openrouter"],
+        modelo=configuracion.modelos_por_proveedor["openrouter"],
+    )
+    emitido: list[str] = []
+    cambios: list[chat.CambioProveedor] = []
+    monkeypatch.setattr(chat, "guardar_registro", lambda registro: None)
+
+    resultado = chat.responder_con_rutas(
+        rutas=(
+            chat.RutaIA(SimpleNamespace(responses=principal), configuracion),
+            chat.RutaIA(
+                SimpleNamespace(responses=respaldo),
+                configuracion_respaldo,
+            ),
+        ),
+        historial=[{"role": "user", "content": "Continúa"}],
+        personalidad="Personalidad de prueba",
+        registro=RegistroHerramientas.descubrir(),
+        emitir_texto=emitido.append,
+        emitir_cambio=cambios.append,
+    )
+
+    assert resultado.texto == "Texto parcial. Continuación segura."
+    assert "".join(emitido) == resultado.texto
+    assert resultado.proveedor_final == "openrouter"
+    assert cambios[0].continuo_texto_parcial is True
+    assert respaldo.llamadas[0]["input"][-2] == {
+        "role": "assistant",
+        "content": "Texto parcial. ",
+    }
+
+
+def test_respaldo_no_repite_herramienta_ejecutada(monkeypatch) -> None:
+    principal = APIMixta(
+        [
+            respuesta_con_llamada("calcular", {"expresion": "40 + 2"}, 1),
+            "fallo",
+        ]
+    )
+    respaldo = APIMixta([respuesta_final()])
+    configuracion = chat.cargar_configuracion()
+    configuracion_respaldo = replace(
+        configuracion,
+        proveedor=configuracion.proveedores["openrouter"],
+        modelo=configuracion.modelos_por_proveedor["openrouter"],
+    )
+    registro = RegistroContador()
+    monkeypatch.setattr(chat, "guardar_registro", lambda registro: None)
+
+    resultado = chat.responder_con_rutas(
+        rutas=(
+            chat.RutaIA(SimpleNamespace(responses=principal), configuracion),
+            chat.RutaIA(
+                SimpleNamespace(responses=respaldo),
+                configuracion_respaldo,
+            ),
+        ),
+        historial=[{"role": "user", "content": "Calcula 40 + 2"}],
+        personalidad="Personalidad de prueba",
+        registro=registro,
+    )
+
+    assert registro.ejecuciones == 1
+    assert resultado.proveedor_final == "openrouter"
+    assert any(
+        isinstance(elemento, dict)
+        and elemento.get("type") == "function_call_output"
+        for elemento in respaldo.llamadas[0]["input"]
+    )

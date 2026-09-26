@@ -49,7 +49,9 @@ La PWA guarda en caché únicamente su interfaz estática. Las preguntas, respue
 
 ## Estado y notificaciones
 
-El botón «Estado» muestra si el núcleo está en línea, el proveedor y el modelo activos, el tiempo que lleva funcionando y el número de conexiones WebSocket.
+El botón «Estado» muestra si el núcleo está en línea, el proveedor y el modelo activos, el tiempo que lleva funcionando y el número de conexiones WebSocket. En «Motor de IA» se eligen el proveedor principal, el respaldo, el modelo de cada uno, la conmutación automática y el tiempo antes de volver a probar el principal. Los cambios se guardan para todas las sesiones sin reiniciar ASTRO.
+
+Durante una conversación, la PWA acumula peticiones, tokens y coste desde que se abrió la conexión. Si el proveedor cambia por una caída o por su recuperación, aparece un aviso en el chat y la conversación conserva el historial de esa sesión.
 
 En la PWA instalada del iPhone, «Activar notificaciones» solicita permiso mediante una acción expresa de Jhony y registra ese dispositivo para recibir avisos Web Push. «Enviar prueba» comprueba la entrega y «Desactivar en ASTRO» elimina la suscripción del servidor y del dispositivo.
 

@@ -13,8 +13,8 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/icon.svg">
-  <link rel="stylesheet" href="/static/app.css">
-  <script src="/static/app.js" defer></script>
+  <link rel="stylesheet" href="/static/app.css?v=6">
+  <script src="/static/app.js?v=6" defer></script>
 </head>
 <body>
   <div class="app">
@@ -72,6 +72,20 @@
         <div><dt>Tiempo activo</dt><dd id="estado-tiempo">—</dd></div>
         <div><dt>Conexiones</dt><dd id="estado-conexiones">—</dd></div>
       </dl>
+      <section class="ajustes-ia">
+        <h3>Motor de IA</h3>
+        <p id="estado-enrutador">Consultando configuración…</p>
+        <form id="formulario-ia" class="formulario-ajustes">
+          <label>Proveedor principal<select id="ia-principal"></select></label>
+          <label>Modelo principal<input id="ia-modelo-principal" maxlength="120" autocomplete="off"></label>
+          <label>Proveedor de respaldo<select id="ia-respaldo"></select></label>
+          <label>Modelo de respaldo<input id="ia-modelo-respaldo" maxlength="120" autocomplete="off"></label>
+          <label class="interruptor"><input id="ia-automatico" type="checkbox"> Usar el respaldo automáticamente</label>
+          <label>Volver a probar el principal después de<input id="ia-reintento" type="number" min="10" max="3600" inputmode="numeric"><span>segundos</span></label>
+          <button id="guardar-ia" class="boton-accion" type="submit">Guardar configuración</button>
+          <p id="resultado-ia" role="status"></p>
+        </form>
+      </section>
       <section class="notificaciones">
         <h3>Notificaciones</h3>
         <p id="estado-notificaciones">Comprobando compatibilidad…</p>

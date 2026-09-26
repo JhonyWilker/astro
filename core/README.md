@@ -22,18 +22,17 @@ ASTRO muestra cada fragmento de texto en cuanto llega desde la API, sin esperar 
 
 ## Configuración central
 
-`chat.py` lee `config/config.yaml` al arrancar. El archivo decide el proveedor, el modelo, el idioma habitual, el máximo de tokens de salida y cuántos turnos se envían como contexto. Los valores se validan antes de realizar peticiones a la API.
+`chat.py` lee `config/config.yaml` al arrancar. El archivo define los proveedores disponibles, sus modelos predeterminados, el idioma habitual, el máximo de tokens de salida y cuántos turnos se envían como contexto. Los valores se validan antes de realizar peticiones a la API.
 
 ## Proveedores de IA
 
-OpenAI es el proveedor predeterminado y OpenRouter está configurado como alternativa. Para cambiar entre ellos solo se editan estas dos líneas de `config/config.yaml` y se reinicia ASTRO:
+OpenAI es el proveedor principal predeterminado y OpenRouter es su respaldo. El panel «Estado» de la PWA permite cambiar el proveedor principal, el respaldo, sus modelos, la conmutación automática y el tiempo de recuperación sin editar código ni reiniciar ASTRO.
 
-```yaml
-proveedor: openrouter
-modelo: openai/gpt-6-astra
-```
+La selección se guarda en `data/ajustes_ia.json`, fuera de Git. `config/config.yaml` conserva los valores iniciales que se usan cuando todavía no existe ese archivo.
 
-Cada proveedor declara en el mismo YAML su nombre visible, URL base y nombre de la variable que contiene su clave. Las claves `OPENAI_API_KEY` y `OPENROUTER_API_KEY` viven exclusivamente en `.env`; nunca se escriben en el YAML ni en el código. No existe conmutación automática: una petición se envía únicamente al proveedor seleccionado.
+Cada proveedor declara en el YAML su nombre visible, URL base, modelo predeterminado y nombre de la variable que contiene su clave. Las claves `OPENAI_API_KEY` y `OPENROUTER_API_KEY` viven exclusivamente en `.env`; nunca se escriben en el YAML, en los ajustes ni en el código.
+
+Si el principal falla por conexión, timeout, límite, autenticación o error del servidor, ASTRO termina ese turno con el respaldo. Ambos proveedores reciben el historial de la sesión. Si la caída ocurre durante el streaming, el respaldo recibe además el fragmento ya visible y continúa desde él. Los resultados de herramientas ya completadas se reutilizan sin ejecutarlas otra vez. Tras el tiempo configurado, un turno nuevo prueba el principal y vuelve a él automáticamente si responde. Los errores de una petición inválida no activan el respaldo.
 
 ## Uso, coste y tiempo
 
@@ -77,6 +76,8 @@ El número máximo de ejecuciones se define en `agente.pasos_herramienta_maximos
 
 - `GET /health`: comprobación mínima de salud.
 - `GET /status`: versión, proveedor, modelo, tiempo activo, conexiones y estado de Web Push.
+- `GET /ai/settings`: estado y opciones del motor de IA junto con un token CSRF efímero.
+- `PUT /ai/settings`: valida y guarda los ajustes del motor de IA; requiere el token CSRF.
 - `GET /push/public-key`: clave pública VAPID para registrar el dispositivo.
 - `POST /push/subscribe`: registra o actualiza una suscripción.
 - `POST /push/unsubscribe`: elimina una suscripción.
@@ -84,7 +85,7 @@ El número máximo de ejecuciones se define en `agente.pasos_herramienta_maximos
 - `GET /`: aplicación web instalable.
 - `WS /ws`: conversación en streaming.
 
-El servidor envía `ready` al conectar, uno o más mensajes `delta` durante la respuesta y `done` al terminar, con el uso agregado del turno. Los fallos se envían como `error`.
+El servidor envía `ready` al conectar, uno o más mensajes `delta` durante la respuesta, `provider_change` cuando cambia la ruta y `done` al terminar, con el uso agregado del turno y el proveedor que completó la respuesta. Los fallos se envían como `error`.
 
 Cada WebSocket crea una `SesionASTRO` independiente. `core/sesion.py` comparte la configuración, la personalidad y el registro de herramientas, pero conserva el historial por conexión para que dos clientes no mezclen sus conversaciones.
 
@@ -92,7 +93,7 @@ El despliegue usa un único proceso de Uvicorn porque el historial todavía vive
 
 ## Aplicación web instalable
 
-`clients/web` contiene la PWA de ASTRO: HTML accesible, estilos adaptados al iPhone, cliente WebSocket seguro, manifiesto, service worker e icono SVG. La app muestra el streaming, el coste del último turno, el estado de conexión y reconecta automáticamente.
+`clients/web` contiene la PWA de ASTRO: HTML accesible, estilos adaptados al iPhone, cliente WebSocket seguro, manifiesto, service worker e icono SVG. La app muestra el streaming, el uso y coste acumulados de la sesión, el estado de conexión y reconecta automáticamente. Su panel «Estado» también permite administrar el motor de IA.
 
 El service worker cachea solo la carcasa visual para que la interfaz pueda abrirse aunque la red tarde. No intercepta el WebSocket ni guarda conversaciones. La URL preferida es `https://astro-vps.tailbee6db.ts.net/`.
 

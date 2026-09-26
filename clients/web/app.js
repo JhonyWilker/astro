@@ -17,6 +17,16 @@ const estadoProveedor = document.querySelector("#estado-proveedor");
 const estadoModelo = document.querySelector("#estado-modelo");
 const estadoTiempo = document.querySelector("#estado-tiempo");
 const estadoConexiones = document.querySelector("#estado-conexiones");
+const estadoEnrutador = document.querySelector("#estado-enrutador");
+const formularioIA = document.querySelector("#formulario-ia");
+const iaPrincipal = document.querySelector("#ia-principal");
+const iaModeloPrincipal = document.querySelector("#ia-modelo-principal");
+const iaRespaldo = document.querySelector("#ia-respaldo");
+const iaModeloRespaldo = document.querySelector("#ia-modelo-respaldo");
+const iaAutomatico = document.querySelector("#ia-automatico");
+const iaReintento = document.querySelector("#ia-reintento");
+const guardarIA = document.querySelector("#guardar-ia");
+const resultadoIA = document.querySelector("#resultado-ia");
 const estadoNotificaciones = document.querySelector("#estado-notificaciones");
 const activarPush = document.querySelector("#activar-push");
 const probarPush = document.querySelector("#probar-push");
@@ -28,10 +38,22 @@ let reintento = null;
 let esperaReconexion = 1000;
 let huboConexion = false;
 let clavePublicaPush = null;
+let peticionesSesion = 0;
+let tokensSesion = 0;
+let costeSesion = 0;
+let csrfIA = null;
+let proveedoresIA = {};
 
 function mostrarEstado(tipo, texto) { estado.className = `estado ${tipo}`; estadoTexto.textContent = texto; }
 function desplazar() { mensajes.scrollTo({ top: mensajes.scrollHeight, behavior: "smooth" }); }
 function ocultarBienvenida() { if (bienvenida) bienvenida.hidden = true; }
+function reiniciarUsoSesion() {
+  peticionesSesion = 0;
+  tokensSesion = 0;
+  costeSesion = 0;
+  uso.textContent = "";
+  uso.hidden = true;
+}
 function agregarMensaje(texto, autor) {
   ocultarBienvenida();
   const contenedor = document.createElement("article"); contenedor.className = `mensaje ${autor}`;
@@ -70,10 +92,40 @@ async function actualizarPanel() {
     estadoModelo.textContent = datos.model;
     estadoTiempo.textContent = formatearTiempo(datos.uptime_seconds);
     estadoConexiones.textContent = String(datos.websocket_connections);
+    estadoEnrutador.textContent = datos.ai.degraded
+      ? `Modo respaldo. Se volverá a probar el principal en ${datos.ai.retry_in_seconds} s.`
+      : "Proveedor principal activo.";
   } catch {
     estadoNucleo.textContent = "No disponible";
   }
+  await cargarAjustesIA();
   await actualizarEstadoPush();
+}
+function llenarProveedor(select, proveedores, elegido) {
+  select.replaceChildren(...proveedores.map((proveedor) => {
+    const opcion = document.createElement("option");
+    opcion.value = proveedor.id; opcion.textContent = proveedor.name; return opcion;
+  }));
+  select.value = elegido;
+}
+function sincronizarModelos() {
+  iaModeloPrincipal.value = proveedoresIA[iaPrincipal.value]?.model || "";
+  iaModeloRespaldo.value = proveedoresIA[iaRespaldo.value]?.model || "";
+}
+async function cargarAjustesIA() {
+  try {
+    const datos = await pedirJSON("/ai/settings");
+    csrfIA = datos.csrf_token;
+    proveedoresIA = Object.fromEntries(datos.providers.map((item) => [item.id, item]));
+    llenarProveedor(iaPrincipal, datos.providers, datos.primary);
+    llenarProveedor(iaRespaldo, datos.providers, datos.fallback);
+    iaAutomatico.checked = datos.automatic;
+    iaReintento.value = String(datos.retry_seconds);
+    sincronizarModelos();
+    resultadoIA.textContent = "";
+  } catch (error) {
+    resultadoIA.textContent = error.message;
+  }
 }
 async function actualizarEstadoPush() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
@@ -114,18 +166,35 @@ function conectar() {
     try { evento = JSON.parse(data); } catch { agregarSistema("ASTRO recibió un mensaje que no pudo interpretar."); return; }
     if (evento.type === "ready") {
       mostrarEstado("conectado", "Conectado");
-      if (huboConexion) agregarSistema("Conexión restablecida. Comienza una sesión nueva.");
+      if (huboConexion) {
+        agregarSistema("Conexión restablecida. Comienza una sesión nueva.");
+        reiniciarUsoSesion();
+      }
       huboConexion = true; esperaReconexion = 1000; respondiendo = false; habilitarEntrada(); entrada.focus(); return;
     }
     if (evento.type === "delta") {
       if (!respuestaActual) respuestaActual = agregarMensaje("", "astro");
       respuestaActual.textContent += evento.text; desplazar(); return;
     }
+    if (evento.type === "provider_change") {
+      if (evento.reason === "proveedor principal recuperado") {
+        agregarSistema(`${evento.to} volvió a estar disponible y recuperó el servicio principal.`);
+      } else {
+        const detalle = evento.continued_partial ? " desde el texto ya mostrado" : "";
+        agregarSistema(`${evento.from} se interrumpió; continúo con ${evento.to}${detalle}.`);
+      }
+      estadoProveedor.textContent = evento.to; return;
+    }
     if (evento.type === "done") {
       const registros = Array.isArray(evento.usage) ? evento.usage : [];
-      const tokens = registros.reduce((total, item) => total + item.tokens, 0);
-      const coste = registros.reduce((total, item) => total + item.coste_estimado_usd, 0);
-      uso.textContent = `${registros.length} petición/es · ${tokens} tokens · ${coste.toFixed(6)} USD`;
+      peticionesSesion += registros.length;
+      tokensSesion += registros.reduce((total, item) => total + item.tokens, 0);
+      costeSesion += registros.reduce((total, item) => total + item.coste_estimado_usd, 0);
+      uso.textContent = `${peticionesSesion} petición/es en esta sesión · ${tokensSesion} tokens · ${costeSesion.toFixed(6)} USD`;
+      if (evento.provider && proveedoresIA[evento.provider]) {
+        estadoProveedor.textContent = proveedoresIA[evento.provider].name;
+      }
+      if (evento.model) estadoModelo.textContent = evento.model;
       uso.hidden = false; respuestaActual = null; respondiendo = false; habilitarEntrada(); entrada.focus(); return;
     }
     if (evento.type === "error") { agregarSistema(`Error: ${evento.message}`); respuestaActual = null; respondiendo = false; habilitarEntrada(); }
@@ -153,6 +222,42 @@ abrirEstado.addEventListener("click", async () => {
 });
 cerrarEstado.addEventListener("click", () => { panelEstado.hidden = true; });
 panelEstado.addEventListener("click", (evento) => { if (evento.target === panelEstado) panelEstado.hidden = true; });
+iaPrincipal.addEventListener("change", () => {
+  if (iaPrincipal.value === iaRespaldo.value) {
+    iaRespaldo.value = Object.keys(proveedoresIA).find((id) => id !== iaPrincipal.value) || "";
+  }
+  sincronizarModelos();
+});
+iaRespaldo.addEventListener("change", () => {
+  if (iaRespaldo.value === iaPrincipal.value) {
+    iaPrincipal.value = Object.keys(proveedoresIA).find((id) => id !== iaRespaldo.value) || "";
+  }
+  sincronizarModelos();
+});
+formularioIA.addEventListener("submit", async (evento) => {
+  evento.preventDefault(); resultadoIA.textContent = ""; guardarIA.disabled = true;
+  const modelos = Object.fromEntries(Object.entries(proveedoresIA).map(([id, item]) => [id, item.model]));
+  modelos[iaPrincipal.value] = iaModeloPrincipal.value.trim();
+  modelos[iaRespaldo.value] = iaModeloRespaldo.value.trim();
+  try {
+    const datos = await pedirJSON("/ai/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-ASTRO-CSRF": csrfIA },
+      body: JSON.stringify({
+        principal: iaPrincipal.value,
+        respaldo: iaRespaldo.value,
+        modelos,
+        cambio_automatico: iaAutomatico.checked,
+        reintento_principal_segundos: Number(iaReintento.value)
+      })
+    });
+    estadoProveedor.textContent = datos.provider_name; estadoModelo.textContent = datos.model;
+    estadoEnrutador.textContent = "Proveedor principal activo.";
+    resultadoIA.textContent = "Configuración guardada. Se aplicará al siguiente mensaje.";
+    proveedoresIA = Object.fromEntries(datos.providers.map((item) => [item.id, item]));
+  } catch (error) { resultadoIA.textContent = error.message; }
+  finally { guardarIA.disabled = false; }
+});
 activarPush.addEventListener("click", async () => {
   try {
     const permiso = await Notification.requestPermission();
@@ -197,7 +302,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) cone
 if (window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone) instalar.hidden = true;
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/service-worker.js").catch(() => agregarSistema("La instalación sin conexión no está disponible."));
+    navigator.serviceWorker.register("/service-worker.js?v=6").catch(() => agregarSistema("La instalación sin conexión no está disponible."));
   });
 }
 pedirJSON("/push/public-key")

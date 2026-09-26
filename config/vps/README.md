@@ -33,18 +33,13 @@ Las restauraciones deben hacerse primero en una carpeta temporal y compararse co
 
 El proyecto desplegado vive en `/opt/astro` y se ejecuta con Docker Compose. El contenedor funciona con un usuario sin privilegios, sistema de archivos de solo lectura, capacidades Linux eliminadas y reinicio automático salvo detención manual.
 
-El archivo `/opt/astro/.env` pertenece a `root`, tiene permisos `600` y no se guarda en Git. Contiene claves separadas para OpenAI y OpenRouter; el proveedor activo nunca se deduce de las claves, sino de `config/config.yaml`. El puerto 8000 se publica únicamente en `127.0.0.1` para el proxy HTTPS y en `100.123.43.31`, la IP privada de Tailscale; nunca en la interfaz pública.
+El archivo `/opt/astro/.env` pertenece a `root`, tiene permisos `600` y no se guarda en Git. Contiene claves separadas para OpenAI y OpenRouter; el proveedor activo nunca se deduce de las claves. El puerto 8000 se publica únicamente en `127.0.0.1` para el proxy HTTPS y en `100.123.43.31`, la IP privada de Tailscale; nunca en la interfaz pública.
 
 ### Cambiar de proveedor de IA
 
-OpenAI es el proveedor predeterminado. Para usar OpenRouter se cambian únicamente estas dos líneas de `/opt/astro/config/config.yaml`:
+OpenAI es el proveedor principal predeterminado y OpenRouter es el respaldo. El cambio normal se realiza desde «Estado» → «Motor de IA» en la PWA; no requiere reconstruir ni reiniciar el contenedor. La selección persistente se guarda en `/opt/astro/data/ajustes_ia.json`, fuera de Git y con permisos `600`. `config/config.yaml` contiene los valores iniciales para una instalación sin ajustes guardados.
 
-```yaml
-proveedor: openrouter
-modelo: openai/gpt-6-astra
-```
-
-Después se reconstruye o reinicia el contenedor para cargar la configuración. No hay cambio automático de proveedor ni envío simultáneo. La respuesta de `/status` permite comprobar los campos `provider` y `model` sin mostrar secretos.
+La conmutación automática envía cada petición a un solo proveedor. Si el principal falla por conexión, timeout, límite, autenticación o error del servidor, el respaldo continúa el turno usando el historial, el texto parcial visible y los resultados de herramientas ya completadas. Después del periodo configurado —120 segundos de forma predeterminada— un turno nuevo vuelve a probar el principal y lo recupera si responde. Una petición inválida no activa el respaldo. La respuesta de `/status` y el panel permiten comprobar el proveedor activo y si el principal está degradado sin mostrar secretos.
 
 ### Estado y registros
 

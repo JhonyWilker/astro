@@ -50,6 +50,7 @@ def test_cambiar_a_openrouter_solo_requiere_yaml(tmp_path) -> None:
     assert configuracion.proveedor.nombre_visible == "OpenRouter"
     assert configuracion.proveedor.base_url == "https://openrouter.ai/api/v1"
     assert configuracion.modelo == "openai/gpt-6-astra"
+    assert configuracion.proveedor_respaldo == "openai"
 
 
 def test_configuracion_rechaza_proveedor_inexistente(tmp_path) -> None:

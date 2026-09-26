@@ -9,10 +9,17 @@ proveedores:
     nombre_visible: OpenAI
     base_url: https://api.openai.com/v1
     clave_entorno: OPENAI_API_KEY
+    modelo: gpt-6-astra
   openrouter:
     nombre_visible: OpenRouter
     base_url: https://openrouter.ai/api/v1
     clave_entorno: OPENROUTER_API_KEY
+    modelo: openai/gpt-6-astra
+
+ia:
+  respaldo: openrouter
+  cambio_automatico: true
+  reintento_principal_segundos: 120
 
 api:
   timeout_segundos: 30

@@ -9,7 +9,7 @@ class SesionFalsa:
     def __init__(self) -> None:
         self.preguntas: list[str] = []
 
-    def preguntar(self, pregunta: str, emitir_texto):
+    def preguntar(self, pregunta: str, emitir_texto, emitir_cambio=None):
         self.preguntas.append(pregunta)
         emitir_texto("Hola, ")
         emitir_texto("Jhony.")
@@ -21,6 +21,9 @@ class SesionFalsa:
         return SimpleNamespace(
             texto="Hola, Jhony.",
             registros=(registro,),
+            proveedor_final="prueba",
+            modelo_final="modelo-prueba",
+            cambios_proveedor=(),
         )
 
 
@@ -31,9 +34,57 @@ class NucleoFalso:
             proveedor=SimpleNamespace(nombre_visible="Proveedor prueba"),
             modelo="modelo-prueba",
         )
+        self._estado_ia = {
+            "active": "prueba",
+            "provider": "prueba",
+            "provider_name": "Proveedor prueba",
+            "model": "modelo-prueba",
+            "primary": "prueba",
+            "fallback": "respaldo",
+            "automatic": True,
+            "retry_seconds": 120,
+            "retry_in_seconds": 0,
+            "degraded": False,
+            "last_error": None,
+            "providers": [
+                {
+                    "id": "prueba",
+                    "name": "Proveedor prueba",
+                    "model": "modelo-prueba",
+                },
+                {
+                    "id": "respaldo",
+                    "name": "Respaldo prueba",
+                    "model": "modelo-respaldo",
+                },
+            ],
+        }
 
     def nueva_sesion(self) -> SesionFalsa:
         return self.sesion
+
+    def estado_ia(self) -> dict:
+        return dict(self._estado_ia)
+
+    def actualizar_ajustes_ia(self, ajustes) -> dict:
+        proveedor = next(
+            item
+            for item in self._estado_ia["providers"]
+            if item["id"] == ajustes.principal
+        )
+        self._estado_ia.update(
+            {
+                "active": ajustes.principal,
+                "provider": ajustes.principal,
+                "provider_name": proveedor["name"],
+                "model": ajustes.modelos[ajustes.principal],
+                "primary": ajustes.principal,
+                "fallback": ajustes.respaldo,
+                "automatic": ajustes.cambio_automatico,
+                "retry_seconds": ajustes.reintento_principal_segundos,
+            }
+        )
+        return self.estado_ia()
 
 
 class NotificacionesFalsas:
@@ -85,6 +136,35 @@ def test_panel_de_estado() -> None:
     assert respuesta.json()["push"]["configured"] is True
 
 
+def test_ajustes_ia_exigen_token_y_se_actualizan() -> None:
+    nucleo = NucleoFalso()
+    with TestClient(crear_app(nucleo, NotificacionesFalsas())) as cliente:
+        actuales = cliente.get("/ai/settings")
+        datos = actuales.json()
+        nuevos = {
+            "principal": "respaldo",
+            "respaldo": "prueba",
+            "modelos": {
+                "prueba": "modelo-prueba",
+                "respaldo": "modelo-respaldo-2",
+            },
+            "cambio_automatico": False,
+            "reintento_principal_segundos": 300,
+        }
+        sin_token = cliente.put("/ai/settings", json=nuevos)
+        actualizado = cliente.put(
+            "/ai/settings",
+            json=nuevos,
+            headers={"X-ASTRO-CSRF": datos["csrf_token"]},
+        )
+
+    assert actuales.status_code == 200
+    assert sin_token.status_code == 403
+    assert actualizado.status_code == 200
+    assert actualizado.json()["primary"] == "respaldo"
+    assert actualizado.json()["model"] == "modelo-respaldo-2"
+
+
 def test_flujo_de_suscripcion_push() -> None:
     notificaciones = NotificacionesFalsas()
     suscripcion = {
@@ -117,7 +197,8 @@ def test_pagina_web() -> None:
     assert respuesta.status_code == 200
     assert "<title>ASTRO</title>" in respuesta.text
     assert 'rel="manifest"' in respuesta.text
-    assert 'src="/static/app.js"' in respuesta.text
+    assert 'src="/static/app.js?v=6"' in respuesta.text
+    assert 'href="/static/app.css?v=6"' in respuesta.text
 
 
 def test_manifiesto_pwa() -> None:
