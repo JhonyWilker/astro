@@ -7,11 +7,18 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+      - .env.vapid
+    environment:
+      ASTRO_PUSH_DATA_PATH: /app/data/push_subscriptions.json
+      ASTRO_VAPID_PRIVATE_KEY_PATH: /run/secrets/vapid_private_key
     ports:
       - "127.0.0.1:8000:8000"
       - "${ASTRO_BIND_IP:?Define ASTRO_BIND_IP}:8000:8000"
     volumes:
       - ./logs:/app/logs
+      - ./data:/app/data
+    secrets:
+      - vapid_private_key
     read_only: true
     tmpfs:
       - /tmp:size=64m,noexec,nosuid,nodev
@@ -19,3 +26,7 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+
+secrets:
+  vapid_private_key:
+    file: ./.secrets/vapid/private_key.pem

@@ -115,3 +115,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Publicar la app mediante Tailscale Serve en `https://astro-vps.tailbee6db.ts.net/`, con proxy a `127.0.0.1:8000`, y no usar Tailscale Funnel. Cachear únicamente la carcasa estática de la PWA y mantener las conversaciones fuera del almacenamiento del navegador.
 - Motivo: Obtener HTTPS válido, WebSocket seguro e instalación en la pantalla de inicio sin abrir el servicio a Internet ni guardar datos privados en el dispositivo.
 - Consecuencia: El nombre técnico del certificado queda visible en los registros públicos de certificados, con autorización de Jhony, pero solo los dispositivos del tailnet pueden acceder. Tailscale debe estar conectado; una reconexión crea una sesión nueva hasta que exista memoria persistente.
+
+## 2026-09-26 · Web Push privado con VAPID
+
+- Contexto: ASTRO necesita avisar en el iPhone incluso cuando la PWA está cerrada, sin publicar el núcleo en Internet ni guardar conversaciones en servicios de notificación.
+- Decisión: Usar Web Push estándar con claves VAPID propias, suscripción iniciada expresamente desde la PWA instalada y entrega mediante el service worker. La clave privada permanece fuera de Git y se monta como secreto de Docker.
+- Motivo: iOS permite Web Push en aplicaciones añadidas a la pantalla de inicio y no requiere una cuenta de desarrollador de Apple. El mecanismo mantiene ASTRO dentro del tailnet mientras el servicio Push entrega únicamente el aviso visible.
+- Consecuencia: Cada dispositivo debe autorizar las notificaciones manualmente. El servidor conserva solo los datos técnicos de las suscripciones, elimina las expiradas y nunca incluye conversaciones en ellas. La primera prueba entregó correctamente un aviso al iPhone con ASTRO cerrado.

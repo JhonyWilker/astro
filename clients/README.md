@@ -46,3 +46,11 @@ Para instalarla:
 5. Pulsa «Añadir» y abre ASTRO desde su icono.
 
 La PWA guarda en caché únicamente su interfaz estática. Las preguntas, respuestas y conversaciones no se almacenan en el navegador. El historial continúa en memoria mientras se mantiene la conexión WebSocket; una reconexión inicia una sesión nueva.
+
+## Estado y notificaciones
+
+El botón «Estado» muestra si el núcleo está en línea, el modelo activo, el tiempo que lleva funcionando y el número de conexiones WebSocket.
+
+En la PWA instalada del iPhone, «Activar notificaciones» solicita permiso mediante una acción expresa de Jhony y registra ese dispositivo para recibir avisos Web Push. «Enviar prueba» comprueba la entrega y «Desactivar en ASTRO» elimina la suscripción del servidor y del dispositivo.
+
+iOS solo admite estas notificaciones desde una app web añadida a la pantalla de inicio. ASTRO no guarda conversaciones en la suscripción: únicamente conserva los datos técnicos necesarios para entregar el aviso.

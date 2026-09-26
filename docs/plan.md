@@ -136,7 +136,7 @@ Objetivo: tener el entorno instalado y la base de Python suficiente para entende
 
 **Puerta del bloque 0:** un script de 10 líneas, escrito y entendido por Jhony, que envía una pregunta al modelo y muestra la respuesta.
 
-## Bloque 1 — Cerebro en texto y app web (fases 11–22d)
+## Bloque 1 — Cerebro en texto y app web (fases 11–22e)
 
 Objetivo: el núcleo de ASTRO conversa por texto con personalidad propia, usa herramientas y registra coste y errores. Duración estimada: 3–4 semanas.
 
@@ -157,7 +157,7 @@ Objetivo: el núcleo de ASTRO conversa por texto con personalidad propia, usa he
 | 22a | ✅ Núcleo desplegado en el VPS con FastAPI + WebSocket | Terminal y navegador hablan con el mismo ASTRO |
 | 22b | ✅ Tailscale en el VPS, el PC y el iPhone | ASTRO responde desde el iPhone fuera de casa sin abrir puertos |
 | 22c | ✅ App web propia (PWA): chat de texto con ASTRO, sin Telegram ni apps de terceros | Instalada en la pantalla de inicio del iPhone, conversación completa |
-| 22d | App web: panel de estado y notificaciones push | Aviso de prueba recibido con la app cerrada |
+| 22d | ✅ App web: panel de estado y notificaciones push | Aviso de prueba recibido con la app cerrada |
 | 22e | Proveedores de IA intercambiables: elegir proveedor y modelo desde la configuración | Cambiar entre dos proveedores configurados sin tocar código |
 
 Desde la 22a el cerebro vive en el VPS: programas en el PC, despliegas en el VPS y la app web funciona 24/7 con el PC apagado.
@@ -417,12 +417,12 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **22d — App web: panel de estado y notificaciones push.** Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **22e — Proveedores de IA intercambiables.** Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |
 | 0 — Preparación | 1–10 | Primer script con el modelo | Completado |
-| 1 — Cerebro en texto y app web | 11–22d | Conversación con herramientas, también desde el iPhone | En curso |
+| 1 — Cerebro en texto y app web | 11–22e | Conversación con herramientas, también desde el iPhone | En curso |
 | 2 — Voz | 23–38 | ASTRO 0.1 por voz | Pendiente |
 | 3 — Memoria | 39–52 | Recuerda durante semanas | Pendiente |
 | 4 — Herramientas personales | 53–66 | Email y calendario por voz | Pendiente |

@@ -75,6 +75,24 @@ tailscale serve --bg 8000
 
 No debe sustituirse por Tailscale Funnel: Funnel haría el servicio accesible desde Internet. El nombre técnico del certificado aparece en los registros públicos de certificados, pero el contenido y el acceso continúan siendo privados.
 
+## Notificaciones Web Push
+
+La clave privada VAPID vive en:
+
+```text
+/opt/astro/.secrets/vapid/private_key.pem
+```
+
+Docker la monta como secreto de solo lectura. La clave pública y el asunto VAPID están en `/opt/astro/.env.vapid`, con propietario `root` y permisos `600`. Ninguno de estos archivos se sube a Git.
+
+Las suscripciones se guardan en `/opt/astro/data/push_subscriptions.json`. Para comprobar el sistema sin mostrar secretos:
+
+```bash
+curl https://astro-vps.tailbee6db.ts.net/status
+```
+
+El campo `push.configured` debe ser `true`. El número de suscripciones puede consultarse en `push.subscriptions`.
+
 Antes de cada actualización se ejecutan las pruebas en el portátil. Después se copian únicamente los archivos versionados, se valida la configuración y se reconstruye el servicio:
 
 ```bash

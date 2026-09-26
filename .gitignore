@@ -25,3 +25,4 @@ Thumbs.db
 # Registros temporales
 *.log
 /logs/*.jsonl
+/data/

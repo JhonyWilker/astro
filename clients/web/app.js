@@ -9,12 +9,24 @@ const uso = document.querySelector("#uso");
 const instalar = document.querySelector("#instalar");
 const modal = document.querySelector("#modal");
 const cerrarModal = document.querySelector("#cerrar-modal");
+const abrirEstado = document.querySelector("#abrir-estado");
+const panelEstado = document.querySelector("#panel-estado");
+const cerrarEstado = document.querySelector("#cerrar-estado");
+const estadoNucleo = document.querySelector("#estado-nucleo");
+const estadoModelo = document.querySelector("#estado-modelo");
+const estadoTiempo = document.querySelector("#estado-tiempo");
+const estadoConexiones = document.querySelector("#estado-conexiones");
+const estadoNotificaciones = document.querySelector("#estado-notificaciones");
+const activarPush = document.querySelector("#activar-push");
+const probarPush = document.querySelector("#probar-push");
+const desactivarPush = document.querySelector("#desactivar-push");
 let socket = null;
 let respuestaActual = null;
 let respondiendo = false;
 let reintento = null;
 let esperaReconexion = 1000;
 let huboConexion = false;
+let clavePublicaPush = null;
 
 function mostrarEstado(tipo, texto) { estado.className = `estado ${tipo}`; estadoTexto.textContent = texto; }
 function desplazar() { mensajes.scrollTo({ top: mensajes.scrollHeight, behavior: "smooth" }); }
@@ -32,6 +44,58 @@ function ajustarEntrada() { entrada.style.height = "auto"; entrada.style.height 
 function habilitarEntrada() {
   const conectado = socket && socket.readyState === WebSocket.OPEN;
   entrada.disabled = !conectado || respondiendo; enviar.disabled = !conectado || respondiendo || !entrada.value.trim();
+}
+async function pedirJSON(url, opciones = {}) {
+  const respuesta = await fetch(url, opciones);
+  const datos = await respuesta.json();
+  if (!respuesta.ok) throw new Error(datos.detail || "La operación no pudo completarse.");
+  return datos;
+}
+function formatearTiempo(segundos) {
+  if (segundos < 60) return `${segundos} s`;
+  if (segundos < 3600) return `${Math.floor(segundos / 60)} min`;
+  return `${Math.floor(segundos / 3600)} h ${Math.floor((segundos % 3600) / 60)} min`;
+}
+function base64ABytes(base64) {
+  const relleno = "=".repeat((4 - base64.length % 4) % 4);
+  const normalizado = (base64 + relleno).replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(normalizado), (caracter) => caracter.charCodeAt(0));
+}
+async function actualizarPanel() {
+  try {
+    const datos = await pedirJSON("/status");
+    estadoNucleo.textContent = datos.status === "ok" ? "En línea" : "Con problemas";
+    estadoModelo.textContent = datos.model;
+    estadoTiempo.textContent = formatearTiempo(datos.uptime_seconds);
+    estadoConexiones.textContent = String(datos.websocket_connections);
+  } catch {
+    estadoNucleo.textContent = "No disponible";
+  }
+  await actualizarEstadoPush();
+}
+async function actualizarEstadoPush() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+    estadoNotificaciones.textContent = "Este dispositivo no admite Web Push.";
+    activarPush.disabled = true;
+    return;
+  }
+  const registro = await navigator.serviceWorker.ready;
+  const suscripcion = await registro.pushManager.getSubscription();
+  const permiso = Notification.permission;
+  if (suscripcion && permiso === "granted") {
+    estadoNotificaciones.textContent = "Activadas en este dispositivo.";
+    activarPush.hidden = true;
+    probarPush.disabled = false;
+    desactivarPush.hidden = false;
+  } else {
+    estadoNotificaciones.textContent = permiso === "denied"
+      ? "Bloqueadas en los ajustes del dispositivo."
+      : "Desactivadas. Actívalas para recibir avisos con ASTRO cerrado.";
+    activarPush.hidden = false;
+    activarPush.disabled = permiso === "denied" || !clavePublicaPush;
+    probarPush.disabled = true;
+    desactivarPush.hidden = true;
+  }
 }
 function programarReconexion() {
   if (reintento || !navigator.onLine) return;
@@ -81,6 +145,50 @@ entrada.addEventListener("keydown", (evento) => { if (evento.key === "Enter" && 
 instalar.addEventListener("click", () => { modal.hidden = false; });
 cerrarModal.addEventListener("click", () => { modal.hidden = true; });
 modal.addEventListener("click", (evento) => { if (evento.target === modal) modal.hidden = true; });
+abrirEstado.addEventListener("click", async () => {
+  panelEstado.hidden = false;
+  await actualizarPanel();
+});
+cerrarEstado.addEventListener("click", () => { panelEstado.hidden = true; });
+panelEstado.addEventListener("click", (evento) => { if (evento.target === panelEstado) panelEstado.hidden = true; });
+activarPush.addEventListener("click", async () => {
+  try {
+    const permiso = await Notification.requestPermission();
+    if (permiso !== "granted") { await actualizarEstadoPush(); return; }
+    const registro = await navigator.serviceWorker.ready;
+    const suscripcion = await registro.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: base64ABytes(clavePublicaPush)
+    });
+    await pedirJSON("/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(suscripcion)
+    });
+    await actualizarEstadoPush();
+  } catch (error) { estadoNotificaciones.textContent = error.message; }
+});
+probarPush.addEventListener("click", async () => {
+  probarPush.disabled = true;
+  try {
+    const resultado = await pedirJSON("/push/test", { method: "POST" });
+    estadoNotificaciones.textContent = resultado.sent ? "Aviso de prueba enviado." : "No se pudo enviar el aviso.";
+  } catch (error) { estadoNotificaciones.textContent = error.message; }
+  finally { probarPush.disabled = false; }
+});
+desactivarPush.addEventListener("click", async () => {
+  const registro = await navigator.serviceWorker.ready;
+  const suscripcion = await registro.pushManager.getSubscription();
+  if (suscripcion) {
+    await pedirJSON("/push/unsubscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: suscripcion.endpoint })
+    });
+    await suscripcion.unsubscribe();
+  }
+  await actualizarEstadoPush();
+});
 window.addEventListener("online", conectar);
 window.addEventListener("offline", () => { mostrarEstado("desconectado", "Sin red"); habilitarEntrada(); });
 document.addEventListener("visibilitychange", () => { if (!document.hidden) conectar(); });
@@ -90,4 +198,7 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/service-worker.js").catch(() => agregarSistema("La instalación sin conexión no está disponible."));
   });
 }
+pedirJSON("/push/public-key")
+  .then((datos) => { clavePublicaPush = datos.public_key; })
+  .catch(() => { clavePublicaPush = null; });
 conectar();

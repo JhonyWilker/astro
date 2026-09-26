@@ -64,8 +64,13 @@ El número máximo de ejecuciones se define en `agente.pasos_herramienta_maximos
 
 `core/api.py` publica el mismo núcleo mediante FastAPI:
 
-- `GET /health`: comprobación de salud.
-- `GET /`: cliente web de diagnóstico.
+- `GET /health`: comprobación mínima de salud.
+- `GET /status`: versión, modelo, tiempo activo, conexiones y estado de Web Push.
+- `GET /push/public-key`: clave pública VAPID para registrar el dispositivo.
+- `POST /push/subscribe`: registra o actualiza una suscripción.
+- `POST /push/unsubscribe`: elimina una suscripción.
+- `POST /push/test`: envía un aviso de prueba a los dispositivos registrados.
+- `GET /`: aplicación web instalable.
 - `WS /ws`: conversación en streaming.
 
 El servidor envía `ready` al conectar, uno o más mensajes `delta` durante la respuesta y `done` al terminar, con el uso agregado del turno. Los fallos se envían como `error`.
@@ -79,3 +84,9 @@ El despliegue usa un único proceso de Uvicorn porque el historial todavía vive
 `clients/web` contiene la PWA de ASTRO: HTML accesible, estilos adaptados al iPhone, cliente WebSocket seguro, manifiesto, service worker e icono SVG. La app muestra el streaming, el coste del último turno, el estado de conexión y reconecta automáticamente.
 
 El service worker cachea solo la carcasa visual para que la interfaz pueda abrirse aunque la red tarde. No intercepta el WebSocket ni guarda conversaciones. La URL preferida es `https://astro-vps.tailbee6db.ts.net/`.
+
+## Notificaciones Web Push
+
+`core/notificaciones.py` valida y conserva las suscripciones en `data/push_subscriptions.json`. El archivo contiene direcciones y claves técnicas del servicio Push, pero no preguntas, respuestas ni conversaciones.
+
+Los avisos se firman mediante VAPID. La clave pública puede entregarse al navegador; la privada se monta como secreto de Docker y nunca se guarda en Git. Las suscripciones expiradas se eliminan automáticamente cuando el servicio Push responde con 404 o 410.

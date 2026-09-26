@@ -27,9 +27,36 @@ class SesionFalsa:
 class NucleoFalso:
     def __init__(self) -> None:
         self.sesion = SesionFalsa()
+        self.configuracion = SimpleNamespace(modelo="modelo-prueba")
 
     def nueva_sesion(self) -> SesionFalsa:
         return self.sesion
+
+
+class NotificacionesFalsas:
+    configurado = True
+    clave_publica = "clave-publica"
+
+    def __init__(self) -> None:
+        self.suscripciones = []
+
+    def contar(self) -> int:
+        return len(self.suscripciones)
+
+    def guardar(self, datos) -> int:
+        self.suscripciones = [datos]
+        return 1
+
+    def eliminar(self, endpoint: str) -> int:
+        self.suscripciones = [
+            item
+            for item in self.suscripciones
+            if item["endpoint"] != endpoint
+        ]
+        return len(self.suscripciones)
+
+    def enviar_prueba(self) -> tuple[int, int]:
+        return len(self.suscripciones), 0
 
 
 def test_health() -> None:
@@ -41,6 +68,42 @@ def test_health() -> None:
         "status": "ok",
         "service": "astro-core",
     }
+
+
+def test_panel_de_estado() -> None:
+    with TestClient(
+        crear_app(NucleoFalso(), NotificacionesFalsas())
+    ) as cliente:
+        respuesta = cliente.get("/status")
+
+    assert respuesta.status_code == 200
+    assert respuesta.json()["model"] == "modelo-prueba"
+    assert respuesta.json()["push"]["configured"] is True
+
+
+def test_flujo_de_suscripcion_push() -> None:
+    notificaciones = NotificacionesFalsas()
+    suscripcion = {
+        "endpoint": "https://push.example/dispositivo",
+        "expirationTime": None,
+        "keys": {"p256dh": "p" * 32, "auth": "a" * 16},
+    }
+    with TestClient(
+        crear_app(NucleoFalso(), notificaciones)
+    ) as cliente:
+        assert cliente.get("/push/public-key").json() == {
+            "public_key": "clave-publica"
+        }
+        alta = cliente.post("/push/subscribe", json=suscripcion)
+        prueba = cliente.post("/push/test")
+        baja = cliente.post(
+            "/push/unsubscribe",
+            json={"endpoint": suscripcion["endpoint"]},
+        )
+
+    assert alta.json() == {"subscribed": True, "subscriptions": 1}
+    assert prueba.json() == {"sent": 1, "failed": 0}
+    assert baja.json() == {"subscribed": False, "subscriptions": 0}
 
 
 def test_pagina_web() -> None:
@@ -73,6 +136,8 @@ def test_recursos_pwa() -> None:
     assert javascript.status_code == 200
     assert "new WebSocket" in javascript.text
     assert "serviceWorker.register" in javascript.text
+    assert 'addEventListener("push"' in service_worker.text
+    assert "showNotification" in service_worker.text
     assert estilos.status_code == 200
     assert icono.status_code == 200
     assert service_worker.status_code == 200

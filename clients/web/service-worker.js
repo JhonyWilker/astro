@@ -1,4 +1,4 @@
-const CACHE_NAME = "astro-shell-v1";
+const CACHE_NAME = "astro-shell-v2";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
@@ -50,5 +50,47 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
     caches.match(request).then((cached) => cached || fetch(request))
+  );
+});
+
+self.addEventListener("push", (event) => {
+  let datos = {
+    title: "ASTRO",
+    body: "Tienes una nueva notificación.",
+    url: "/",
+    tag: "astro"
+  };
+  if (event.data) {
+    try {
+      datos = { ...datos, ...event.data.json() };
+    } catch {
+      datos.body = event.data.text();
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(datos.title, {
+      body: datos.body,
+      icon: "/static/icon.svg",
+      badge: "/static/icon.svg",
+      tag: datos.tag,
+      data: { url: datos.url }
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const destino = event.notification.data?.url || "/";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((ventanas) => {
+      for (const ventana of ventanas) {
+        if ("focus" in ventana) {
+          ventana.navigate(destino);
+          return ventana.focus();
+        }
+      }
+      return clients.openWindow(destino);
+    })
   );
 });
