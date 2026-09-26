@@ -101,6 +101,11 @@ def crear_app(
         return {
             "status": "ok",
             "version": aplicacion.version,
+            "provider": getattr(
+                getattr(configuracion, "proveedor", None),
+                "nombre_visible",
+                "desconocido",
+            ),
             "model": getattr(configuracion, "modelo", "desconocido"),
             "uptime_seconds": int(monotonic() - aplicacion.state.inicio),
             "websocket_connections": aplicacion.state.conexiones,
@@ -241,7 +246,11 @@ def crear_app(
                     await websocket.send_json(
                         {
                             "type": "error",
-                            "message": explicar_error(error),
+                            "message": explicar_error(
+                                error,
+                                websocket.app.state.nucleo.configuracion
+                                .proveedor.nombre_visible,
+                            ),
                         }
                     )
                     continue

@@ -1,7 +1,18 @@
+proveedor: openai
 modelo: gpt-6-astra
 idioma: español de España
 zona_horaria: Europe/Madrid
 nivel_servicio: default
+
+proveedores:
+  openai:
+    nombre_visible: OpenAI
+    base_url: https://api.openai.com/v1
+    clave_entorno: OPENAI_API_KEY
+  openrouter:
+    nombre_visible: OpenRouter
+    base_url: https://openrouter.ai/api/v1
+    clave_entorno: OPENROUTER_API_KEY
 
 api:
   timeout_segundos: 30

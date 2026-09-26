@@ -122,3 +122,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Usar Web Push estándar con claves VAPID propias, suscripción iniciada expresamente desde la PWA instalada y entrega mediante el service worker. La clave privada permanece fuera de Git y se monta como secreto de Docker.
 - Motivo: iOS permite Web Push en aplicaciones añadidas a la pantalla de inicio y no requiere una cuenta de desarrollador de Apple. El mecanismo mantiene ASTRO dentro del tailnet mientras el servicio Push entrega únicamente el aviso visible.
 - Consecuencia: Cada dispositivo debe autorizar las notificaciones manualmente. El servidor conserva solo los datos técnicos de las suscripciones, elimina las expiradas y nunca incluye conversaciones en ellas. La primera prueba entregó correctamente un aviso al iPhone con ASTRO cerrado.
+
+## 2026-09-26 · Selección manual de proveedor y modelo
+
+- Contexto: Jhony quiere poder cambiar tanto el modelo como el proveedor de IA sin modificar Python y conservar OpenAI como opción principal.
+- Decisión: Definir los proveedores compatibles en `config/config.yaml`, guardar cada clave en una variable distinta de `.env` y crear el cliente mediante una fábrica común. Configurar OpenAI como predeterminado y OpenRouter como alternativa seleccionable con `proveedor` y `modelo`.
+- Motivo: Desacoplar el núcleo del servicio elegido y permitir pruebas o cambios operativos mediante configuración.
+- Consecuencia: ASTRO nunca cambia de proveedor automáticamente ni duplica peticiones. Tras modificar el YAML hay que reiniciar el servicio. El registro de uso y el panel identifican el proveedor activo; al usar OpenRouter, las conversaciones pasan por OpenRouter y por el proveedor que sirve el modelo.

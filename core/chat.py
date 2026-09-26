@@ -4,10 +4,8 @@ from pathlib import Path
 from time import perf_counter
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import json
-import os
 
 import yaml
-from dotenv import load_dotenv
 from openai import (
     APIConnectionError,
     APIError,
@@ -26,6 +24,10 @@ from core.errores import (
     ErrorLimiteHerramientas,
     ErrorRespuestaASTRO,
 )
+from core.proveedores import (
+    ConfiguracionProveedor,
+    crear_cliente_responses,
+)
 from core.uso import (
     RegistroUso,
     Tarifas,
@@ -37,7 +39,6 @@ from core.uso import (
 from tools.base import ContextoHerramienta, ErrorHerramienta
 from tools.registro import RegistroHerramientas
 
-RUTA_ENV = Path(__file__).resolve().parents[1] / ".env"
 RUTA_CONFIG = Path(__file__).resolve().parents[1] / "config" / "config.yaml"
 RUTA_PERSONALIDAD = (
     Path(__file__).resolve().parents[1] / "config" / "personality.md"
@@ -48,6 +49,7 @@ EmitirTexto = Callable[[str], None]
 
 @dataclass(frozen=True)
 class Configuracion:
+    proveedor: ConfiguracionProveedor
     modelo: str
     idioma: str
     zona_horaria: str
@@ -83,10 +85,46 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     if not isinstance(agente, dict):
         raise ValueError("Falta la sección 'agente' en config/config.yaml")
 
+    proveedores = datos.get("proveedores")
+    if not isinstance(proveedores, dict):
+        raise ValueError("Falta la sección 'proveedores' en config/config.yaml")
+
     precios = datos.get("precios_usd_por_millon")
     if not isinstance(precios, dict):
         raise ValueError(
             "Falta la sección 'precios_usd_por_millon' en config/config.yaml"
+        )
+
+    proveedor_identificador = datos.get("proveedor")
+    if (
+        not isinstance(proveedor_identificador, str)
+        or not proveedor_identificador.strip()
+    ):
+        raise ValueError("'proveedor' debe ser texto no vacío")
+    proveedor_identificador = proveedor_identificador.strip()
+
+    datos_proveedor = proveedores.get(proveedor_identificador)
+    if not isinstance(datos_proveedor, dict):
+        raise ValueError(
+            f"El proveedor '{proveedor_identificador}' no está configurado"
+        )
+
+    campos_proveedor = {
+        "nombre_visible": datos_proveedor.get("nombre_visible"),
+        "base_url": datos_proveedor.get("base_url"),
+        "clave_entorno": datos_proveedor.get("clave_entorno"),
+    }
+    for nombre, valor in campos_proveedor.items():
+        if not isinstance(valor, str) or not valor.strip():
+            raise ValueError(
+                f"El campo '{nombre}' de '{proveedor_identificador}' "
+                "debe ser texto no vacío"
+            )
+        campos_proveedor[nombre] = valor.strip()
+
+    if not campos_proveedor["base_url"].startswith("https://"):
+        raise ValueError(
+            f"La URL de '{proveedor_identificador}' debe usar HTTPS"
         )
 
     modelo = datos.get("modelo")
@@ -163,6 +201,12 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
             raise ValueError(f"El precio '{nombre}' debe ser un número no negativo")
 
     return Configuracion(
+        proveedor=ConfiguracionProveedor(
+            identificador=proveedor_identificador,
+            nombre_visible=campos_proveedor["nombre_visible"],
+            base_url=campos_proveedor["base_url"],
+            clave_entorno=campos_proveedor["clave_entorno"],
+        ),
         modelo=modelo.strip(),
         idioma=idioma.strip(),
         zona_horaria=zona_horaria,
@@ -184,14 +228,10 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
 
 
 def crear_cliente(configuracion: Configuracion) -> OpenAI:
-    load_dotenv(RUTA_ENV)
-    clave_api = os.getenv("OPENAI_API_KEY")
-    if not clave_api:
-        raise RuntimeError("Falta OPENAI_API_KEY en el archivo .env")
-    return OpenAI(
-        api_key=clave_api,
-        timeout=configuracion.timeout_segundos,
-        max_retries=configuracion.reintentos,
+    return crear_cliente_responses(
+        configuracion.proveedor,
+        configuracion.timeout_segundos,
+        configuracion.reintentos,
     )
 
 
@@ -219,7 +259,10 @@ def es_error_reintentable(error: Exception) -> bool:
     )
 
 
-def explicar_error(error: Exception) -> str:
+def explicar_error(
+    error: Exception,
+    proveedor: str = "OpenAI",
+) -> str:
     if isinstance(error, ErrorLimiteHerramientas):
         return (
             "La tarea necesitó más pasos de herramientas de los permitidos. "
@@ -237,21 +280,25 @@ def explicar_error(error: Exception) -> str:
         )
     if isinstance(error, APIConnectionError):
         return (
-            "No puedo conectar con OpenAI. Comprueba la conexión a internet "
+            f"No puedo conectar con {proveedor}. Comprueba la conexión a internet "
             "y vuelve a intentarlo."
         )
     if isinstance(error, AuthenticationError):
-        return "La clave de OpenAI no es válida o dejó de estar activa."
+        return f"La clave de {proveedor} no es válida o dejó de estar activa."
     if isinstance(error, PermissionDeniedError):
-        return "La clave de OpenAI no tiene permiso para realizar esta petición."
+        return (
+            f"La clave de {proveedor} no tiene permiso para realizar "
+            "esta petición."
+        )
     if isinstance(error, BadRequestError):
         return (
-            "OpenAI rechazó la petición. Revisa el modelo y la configuración."
+            f"{proveedor} rechazó la petición. "
+            "Revisa el modelo y la configuración."
         )
     if isinstance(error, RateLimitError):
         if getattr(error, "code", None) in CODIGOS_LIMITE_PERMANENTE:
             return (
-                "Se alcanzó un límite de saldo, uso o gasto de OpenAI. "
+                f"Se alcanzó un límite de saldo, uso o gasto de {proveedor}. "
                 "Necesita revisión en el panel."
             )
         return (
@@ -260,12 +307,12 @@ def explicar_error(error: Exception) -> str:
         )
     if isinstance(error, InternalServerError):
         return (
-            "OpenAI tiene un problema temporal. "
+            f"{proveedor} tiene un problema temporal. "
             "Ya agoté los reintentos configurados."
         )
     if isinstance(error, APIStatusError):
-        return f"OpenAI devolvió un error HTTP {error.status_code}."
-    return "Se produjo un error al comunicarse con OpenAI."
+        return f"{proveedor} devolvió un error HTTP {error.status_code}."
+    return f"Se produjo un error al comunicarse con {proveedor}."
 
 
 def ejecutar_stream(
@@ -308,13 +355,18 @@ def ejecutar_stream(
 
     uso = respuesta_final.usage
     registro = crear_registro(
+        proveedor=configuracion.proveedor.identificador,
         modelo=respuesta_final.model,
         servicio=respuesta_final.service_tier or configuracion.nivel_servicio,
         tokens_entrada=uso.input_tokens,
-        tokens_entrada_cache=uso.input_tokens_details.cached_tokens,
-        tokens_escritura_cache=uso.input_tokens_details.cache_write_tokens,
+        tokens_entrada_cache=uso.input_tokens_details.cached_tokens or 0,
+        tokens_escritura_cache=(
+            uso.input_tokens_details.cache_write_tokens or 0
+        ),
         tokens_salida=uso.output_tokens,
-        tokens_razonamiento=uso.output_tokens_details.reasoning_tokens,
+        tokens_razonamiento=(
+            uso.output_tokens_details.reasoning_tokens or 0
+        ),
         tokens_totales=uso.total_tokens,
         duracion_segundos=duracion,
         tarifas=configuracion.tarifas,
@@ -441,7 +493,11 @@ def main() -> None:
                 emitir_terminal,
             )
         except (APIError, ErrorRespuestaASTRO) as error:
-            print(f"\nASTRO: {explicar_error(error)}")
+            mensaje = explicar_error(
+                error,
+                nucleo.configuracion.proveedor.nombre_visible,
+            )
+            print(f"\nASTRO: {mensaje}")
             continue
         print()
         for registro in resultado.registros:

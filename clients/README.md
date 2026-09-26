@@ -49,7 +49,7 @@ La PWA guarda en caché únicamente su interfaz estática. Las preguntas, respue
 
 ## Estado y notificaciones
 
-El botón «Estado» muestra si el núcleo está en línea, el modelo activo, el tiempo que lleva funcionando y el número de conexiones WebSocket.
+El botón «Estado» muestra si el núcleo está en línea, el proveedor y el modelo activos, el tiempo que lleva funcionando y el número de conexiones WebSocket.
 
 En la PWA instalada del iPhone, «Activar notificaciones» solicita permiso mediante una acción expresa de Jhony y registra ese dispositivo para recibir avisos Web Push. «Enviar prueba» comprueba la entrega y «Desactivar en ASTRO» elimina la suscripción del servidor y del dispositivo.
 

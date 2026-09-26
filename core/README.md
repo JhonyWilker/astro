@@ -22,11 +22,22 @@ ASTRO muestra cada fragmento de texto en cuanto llega desde la API, sin esperar 
 
 ## Configuración central
 
-`chat.py` lee `config/config.yaml` al arrancar. El archivo decide el modelo, el idioma habitual, el máximo de tokens de salida y cuántos turnos se envían como contexto. Los valores se validan antes de realizar peticiones a la API.
+`chat.py` lee `config/config.yaml` al arrancar. El archivo decide el proveedor, el modelo, el idioma habitual, el máximo de tokens de salida y cuántos turnos se envían como contexto. Los valores se validan antes de realizar peticiones a la API.
+
+## Proveedores de IA
+
+OpenAI es el proveedor predeterminado y OpenRouter está configurado como alternativa. Para cambiar entre ellos solo se editan estas dos líneas de `config/config.yaml` y se reinicia ASTRO:
+
+```yaml
+proveedor: openrouter
+modelo: openai/gpt-6-astra
+```
+
+Cada proveedor declara en el mismo YAML su nombre visible, URL base y nombre de la variable que contiene su clave. Las claves `OPENAI_API_KEY` y `OPENROUTER_API_KEY` viven exclusivamente en `.env`; nunca se escriben en el YAML ni en el código. No existe conmutación automática: una petición se envía únicamente al proveedor seleccionado.
 
 ## Uso, coste y tiempo
 
-Cada petición terminada añade metadatos a `logs/uso.jsonl`: modelo, nivel de servicio, tokens, duración y coste estimado. No se guarda el contenido de la conversación.
+Cada petición terminada añade metadatos a `logs/uso.jsonl`: proveedor, modelo, nivel de servicio, tokens, duración y coste estimado. No se guarda el contenido de la conversación.
 
 Tras cada respuesta aparece un resumen. El informe del día se muestra al salir o puede consultarse con:
 
@@ -65,7 +76,7 @@ El número máximo de ejecuciones se define en `agente.pasos_herramienta_maximos
 `core/api.py` publica el mismo núcleo mediante FastAPI:
 
 - `GET /health`: comprobación mínima de salud.
-- `GET /status`: versión, modelo, tiempo activo, conexiones y estado de Web Push.
+- `GET /status`: versión, proveedor, modelo, tiempo activo, conexiones y estado de Web Push.
 - `GET /push/public-key`: clave pública VAPID para registrar el dispositivo.
 - `POST /push/subscribe`: registra o actualiza una suscripción.
 - `POST /push/unsubscribe`: elimina una suscripción.

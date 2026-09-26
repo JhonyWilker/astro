@@ -27,7 +27,10 @@ class SesionFalsa:
 class NucleoFalso:
     def __init__(self) -> None:
         self.sesion = SesionFalsa()
-        self.configuracion = SimpleNamespace(modelo="modelo-prueba")
+        self.configuracion = SimpleNamespace(
+            proveedor=SimpleNamespace(nombre_visible="Proveedor prueba"),
+            modelo="modelo-prueba",
+        )
 
     def nueva_sesion(self) -> SesionFalsa:
         return self.sesion
@@ -77,6 +80,7 @@ def test_panel_de_estado() -> None:
         respuesta = cliente.get("/status")
 
     assert respuesta.status_code == 200
+    assert respuesta.json()["provider"] == "Proveedor prueba"
     assert respuesta.json()["model"] == "modelo-prueba"
     assert respuesta.json()["push"]["configured"] is True
 

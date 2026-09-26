@@ -13,6 +13,7 @@ const abrirEstado = document.querySelector("#abrir-estado");
 const panelEstado = document.querySelector("#panel-estado");
 const cerrarEstado = document.querySelector("#cerrar-estado");
 const estadoNucleo = document.querySelector("#estado-nucleo");
+const estadoProveedor = document.querySelector("#estado-proveedor");
 const estadoModelo = document.querySelector("#estado-modelo");
 const estadoTiempo = document.querySelector("#estado-tiempo");
 const estadoConexiones = document.querySelector("#estado-conexiones");
@@ -65,6 +66,7 @@ async function actualizarPanel() {
   try {
     const datos = await pedirJSON("/status");
     estadoNucleo.textContent = datos.status === "ok" ? "En línea" : "Con problemas";
+    estadoProveedor.textContent = datos.provider;
     estadoModelo.textContent = datos.model;
     estadoTiempo.textContent = formatearTiempo(datos.uptime_seconds);
     estadoConexiones.textContent = String(datos.websocket_connections);

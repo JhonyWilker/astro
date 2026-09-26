@@ -17,6 +17,7 @@ class Tarifas:
 @dataclass(frozen=True)
 class RegistroUso:
     fecha_hora: str
+    proveedor: str
     modelo: str
     servicio: str
     tokens_entrada: int
@@ -51,6 +52,7 @@ def calcular_coste_estimado(
 
 def crear_registro(
     *,
+    proveedor: str,
     modelo: str,
     servicio: str,
     tokens_entrada: int,
@@ -71,6 +73,7 @@ def crear_registro(
     )
     return RegistroUso(
         fecha_hora=datetime.now().astimezone().isoformat(timespec="seconds"),
+        proveedor=proveedor,
         modelo=modelo,
         servicio=servicio,
         tokens_entrada=tokens_entrada,
@@ -138,7 +141,7 @@ def crear_informe_diario(
 
 def resumir_registro(registro: RegistroUso) -> str:
     return (
-        f"Uso: {registro.tokens_totales} tokens "
+        f"{registro.proveedor} · Uso: {registro.tokens_totales} tokens "
         f"({registro.tokens_entrada} entrada + "
         f"{registro.tokens_salida} salida) | "
         f"{registro.duracion_segundos:.2f} s | "

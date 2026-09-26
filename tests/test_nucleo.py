@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import json
 
 import pytest
+from openai import APIConnectionError
 
 import core.chat as chat
 from core.errores import ErrorLimiteHerramientas
@@ -15,7 +16,7 @@ def crear_uso():
         input_tokens=10,
         input_tokens_details=SimpleNamespace(
             cached_tokens=0,
-            cache_write_tokens=0,
+            cache_write_tokens=None,
         ),
         output_tokens=5,
         output_tokens_details=SimpleNamespace(reasoning_tokens=0),
@@ -106,6 +107,19 @@ def test_explicar_limite_herramientas() -> None:
     assert "gasto inesperado" in mensaje
 
 
+def test_error_de_conexion_nombra_el_proveedor_activo() -> None:
+    error = APIConnectionError(
+        request=SimpleNamespace(
+            method="POST",
+            url="https://openrouter.ai/api/v1/responses",
+        )
+    )
+
+    mensaje = chat.explicar_error(error, "OpenRouter")
+
+    assert "conectar con OpenRouter" in mensaje
+
+
 def test_bucle_agente_encadena_tres_herramientas(
     monkeypatch,
     capsys,
@@ -139,6 +153,14 @@ def test_bucle_agente_encadena_tres_herramientas(
     capsys.readouterr()
     assert resultado.texto == "Resultado final: 4072."
     assert len(resultado.registros) == 4
+    assert all(
+        registro.proveedor == "openai"
+        for registro in resultado.registros
+    )
+    assert all(
+        registro.tokens_escritura_cache == 0
+        for registro in resultado.registros
+    )
     assert len(api.llamadas) == 4
     salida_final = json.loads(
         api.llamadas[-1]["input"][-1]["output"]
