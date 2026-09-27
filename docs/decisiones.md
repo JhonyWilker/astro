@@ -157,3 +157,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Capturar con `sounddevice` mediante `RawInputStream`, guardar WAV mono PCM de 16 bits a la frecuencia nativa del micrófono y mantener la dependencia en `requirements-voice.txt`. Las grabaciones se guardan bajo `data/audio`, fuera de Git.
 - Motivo: Obtener un formato estándar compatible con la futura transcripción, sin necesitar NumPy ni instalar controladores de audio en el VPS.
 - Consecuencia: Cada nodo de voz instalará sus dependencias locales y elegirá una entrada disponible. En el portátil de Jhony, WASAPI capturó correctamente a 48 kHz; los índices pueden cambiar al conectar dispositivos.
+
+## 2026-09-27 · Transcripción local en CPU
+
+- Contexto: ASTRO necesita convertir la voz capturada por sus nodos locales en texto español sin enviar audio privado al VPS ni a un proveedor externo.
+- Decisión: Usar `faster-whisper==1.2.1` con el modelo multilingüe `base`, idioma español fijado, búsqueda de 5 haces, CPU y cuantización `int8`. El modelo se guarda bajo `data/models/faster-whisper`, fuera de Git.
+- Motivo: El modelo base ofrece una primera transcripción correcta con una descarga de unos 148 MB, funciona en el portátil sin CUDA y procesa localmente el audio. La CPU permite completar esta fase sin instalar controladores adicionales.
+- Consecuencia: La primera ejecución descarga el modelo y las siguientes pueden reutilizarlo localmente. La detección automática del final de la voz se mantiene para la fase 27 y la optimización con GPU, si resulta necesaria, para la fase 36.
