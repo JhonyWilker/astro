@@ -46,13 +46,21 @@ class NucleoASTRO:
 
     def rutas_para_turno(self) -> tuple[RutaIA, ...]:
         rutas: list[RutaIA] = []
+        ultimo_error: RuntimeError | None = None
         for proveedor in self.ajustes_ia.rutas_para_turno():
             configuracion = self.configuracion_para(proveedor)
             cliente = self.clientes.get(proveedor)
             if cliente is None:
-                cliente = crear_cliente(configuracion)
+                try:
+                    cliente = crear_cliente(configuracion)
+                except RuntimeError as error:
+                    self.registrar_fallo(proveedor, error)
+                    ultimo_error = error
+                    continue
                 self.clientes[proveedor] = cliente
             rutas.append(RutaIA(cliente, configuracion))
+        if not rutas:
+            raise ErrorRespuestaASTRO() from ultimo_error
         return tuple(rutas)
 
     def estado_ia(self) -> dict[str, object]:

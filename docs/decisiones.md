@@ -136,3 +136,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Mantener un principal y un respaldo configurables, persistir la selección fuera de Git y usar un circuit breaker de 120 segundos. El respaldo recibe el historial propio de ASTRO, el texto parcial visible y los resultados de herramientas completadas; el principal solo recupera el servicio al comenzar un turno posterior y superar una petición real.
 - Motivo: Conservar continuidad y disponibilidad sin fingir que dos modelos comparten estado interno ni duplicar herramientas.
 - Consecuencia: La continuación después de un corte puede reformular o repetir una pequeña parte, aunque ASTRO le pide que continúe desde el fragmento recibido. Las herramientas terminadas no se ejecutan de nuevo por un fallo posterior del proveedor. Las acciones externas de riesgo requerirán idempotencia y confirmación en sus fases correspondientes.
+
+## 2026-09-27 · Fallo de preparación aislado por proveedor
+
+- Contexto: Una clave ausente en el proveedor de respaldo cerró el WebSocket antes de que el proveedor principal pudiera responder.
+- Decisión: Preparar cada ruta de forma independiente. Una ruta con clave o configuración ausente se marca como fallida y se omite; otra ruta disponible continúa el turno. Si ninguna puede prepararse, se genera un error controlado.
+- Motivo: La degradación de un proveedor no debe destruir la conversación ni impedir usar otro proveedor sano.
+- Consecuencia: El WebSocket permanece abierto y el historial se conserva ante este tipo de fallo de configuración.

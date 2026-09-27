@@ -34,6 +34,8 @@ Cada proveedor declara en el YAML su nombre visible, URL base, modelo predetermi
 
 Si el principal falla por conexión, timeout, límite, autenticación o error del servidor, ASTRO termina ese turno con el respaldo. Ambos proveedores reciben el historial de la sesión. Si la caída ocurre durante el streaming, el respaldo recibe además el fragmento ya visible y continúa desde él. Los resultados de herramientas ya completadas se reutilizan sin ejecutarlas otra vez. Tras el tiempo configurado, un turno nuevo prueba el principal y vuelve a él automáticamente si responde. Los errores de una petición inválida no activan el respaldo.
 
+Una clave ausente invalida únicamente la ruta de ese proveedor. Si existe otra ruta disponible, ASTRO continúa con ella; si ninguna puede prepararse, devuelve un error controlado sin cerrar el WebSocket.
+
 ## Uso, coste y tiempo
 
 Cada petición terminada añade metadatos a `logs/uso.jsonl`: proveedor, modelo, nivel de servicio, tokens, duración y coste estimado. No se guarda el contenido de la conversación.

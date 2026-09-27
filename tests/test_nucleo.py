@@ -8,7 +8,7 @@ from openai import APIConnectionError
 
 import core.chat as chat
 import core.sesion as sesion
-from core.errores import ErrorLimiteHerramientas
+from core.errores import ErrorLimiteHerramientas, ErrorRespuestaASTRO
 from core.uso import Tarifas, calcular_coste_estimado
 from tools.registro import RegistroHerramientas
 
@@ -273,6 +273,86 @@ def test_sesion_conserva_herramientas_en_contexto_interno(
     assert "herramientas usadas en este turno: calcular" in (
         instancia.historial[1]["content"]
     )
+
+
+def crear_nucleo_con_rutas(
+    rutas: tuple[str, ...],
+) -> tuple[sesion.NucleoASTRO, list[tuple[str, str]]]:
+    configuracion = chat.cargar_configuracion()
+    fallos: list[tuple[str, str]] = []
+    ajustes = SimpleNamespace(
+        rutas_para_turno=lambda: rutas,
+        obtener=lambda: SimpleNamespace(
+            modelos=dict(configuracion.modelos_por_proveedor)
+        ),
+        registrar_fallo=lambda proveedor, mensaje: fallos.append(
+            (proveedor, mensaje)
+        ),
+    )
+    nucleo = sesion.NucleoASTRO(
+        configuracion=configuracion,
+        personalidad="Personalidad de prueba",
+        registro=RegistroHerramientas.descubrir(),
+        ajustes_ia=ajustes,
+    )
+    return nucleo, fallos
+
+
+def test_respaldo_sin_clave_no_bloquea_principal(monkeypatch) -> None:
+    nucleo, fallos = crear_nucleo_con_rutas(("openai", "openrouter"))
+    cliente_principal = SimpleNamespace()
+
+    def crear(configuracion):
+        if configuracion.proveedor.identificador == "openrouter":
+            raise RuntimeError("Falta la clave del respaldo")
+        return cliente_principal
+
+    monkeypatch.setattr(sesion, "crear_cliente", crear)
+
+    rutas = nucleo.rutas_para_turno()
+
+    assert len(rutas) == 1
+    assert rutas[0].cliente is cliente_principal
+    assert rutas[0].configuracion.proveedor.identificador == "openai"
+    assert fallos == [("openrouter", "RuntimeError")]
+
+
+def test_principal_sin_clave_utiliza_respaldo(monkeypatch) -> None:
+    nucleo, fallos = crear_nucleo_con_rutas(("openai", "openrouter"))
+    cliente_respaldo = SimpleNamespace()
+
+    def crear(configuracion):
+        if configuracion.proveedor.identificador == "openai":
+            raise RuntimeError("Falta la clave principal")
+        return cliente_respaldo
+
+    monkeypatch.setattr(sesion, "crear_cliente", crear)
+
+    rutas = nucleo.rutas_para_turno()
+
+    assert len(rutas) == 1
+    assert rutas[0].cliente is cliente_respaldo
+    assert rutas[0].configuracion.proveedor.identificador == "openrouter"
+    assert fallos == [("openai", "RuntimeError")]
+
+
+def test_ninguna_clave_produce_error_controlado(monkeypatch) -> None:
+    nucleo, fallos = crear_nucleo_con_rutas(("openai", "openrouter"))
+
+    def fallar(configuracion):
+        raise RuntimeError(
+            f"Falta la clave de {configuracion.proveedor.identificador}"
+        )
+
+    monkeypatch.setattr(sesion, "crear_cliente", fallar)
+
+    with pytest.raises(ErrorRespuestaASTRO):
+        nucleo.rutas_para_turno()
+
+    assert fallos == [
+        ("openai", "RuntimeError"),
+        ("openrouter", "RuntimeError"),
+    ]
 
 
 def test_respaldo_continua_texto_parcial(monkeypatch) -> None:
