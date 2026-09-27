@@ -87,7 +87,7 @@ El número máximo de ejecuciones se define en `agente.pasos_herramienta_maximos
 - `GET /`: aplicación web instalable.
 - `WS /ws`: conversación en streaming.
 
-El servidor envía `ready` al conectar, uno o más mensajes `delta` durante la respuesta, `provider_change` cuando cambia la ruta y `done` al terminar, con el uso agregado del turno y el proveedor que completó la respuesta. Los fallos se envían como `error`.
+El servidor envía `ready` al conectar, uno o más mensajes `delta` durante la respuesta, `provider_change` cuando cambia la ruta y `done` al terminar, con el uso agregado del turno y el proveedor que completó la respuesta. Una edición entra como `edit`; cuando termina correctamente, el servidor envía `rewind` antes de la respuesta corregida. Los fallos se envían como `error`.
 
 Cada WebSocket crea una `SesionASTRO` independiente. `core/sesion.py` comparte la configuración, la personalidad y el registro de herramientas, pero conserva el historial por conexión para que dos clientes no mezclen sus conversaciones.
 
@@ -96,6 +96,8 @@ El despliegue usa un único proceso de Uvicorn porque el historial todavía vive
 ## Aplicación web instalable
 
 `clients/web` contiene la PWA de ASTRO: HTML accesible, estilos adaptados al iPhone, cliente WebSocket seguro, manifiesto, service worker e icono SVG. La app muestra el streaming, el uso y coste acumulados de la sesión, el estado de conexión y reconecta automáticamente. Su panel «Estado» también permite administrar el motor de IA.
+
+Cada mensaje confirmado de Jhony ofrece «Editar». Al guardar, el servidor reconstruye el historial hasta el turno anterior, genera la nueva respuesta y solo entonces confirma a la PWA que debe eliminar ese mensaje y todos los posteriores. Si la generación falla, conserva el historial original. Cancelar no realiza ninguna petición; el coste ya consumido permanece acumulado.
 
 El service worker cachea solo la carcasa visual para que la interfaz pueda abrirse aunque la red tarde. No intercepta el WebSocket ni guarda conversaciones. La URL preferida es `https://astro-vps.tailbee6db.ts.net/`.
 

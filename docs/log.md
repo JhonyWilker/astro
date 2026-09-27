@@ -197,3 +197,16 @@ Formato:
 - Falló: El `.env` del VPS había perdido la variable de OpenRouter y el núcleo creaba por adelantado los clientes principal y de respaldo. La excepción no controlada cerraba el WebSocket aunque OpenAI funcionase.
 - Decidido: La indisponibilidad de la clave o configuración de un proveedor afecta solo a esa ruta, nunca al transporte WebSocket. Si queda otra ruta válida, ASTRO continúa; si no queda ninguna, informa del error sin destruir la sesión.
 - Siguiente: reiniciar desde cero la prueba de 20 turnos de la puerta del bloque 1.
+
+## 2026-09-27 · Fase 22g — Edición segura de mensajes enviados
+
+- Hecho: Se añadió «Editar» a cada mensaje confirmado de Jhony en la PWA. «Cancelar» conserva la conversación y «Guardar y rehacer» rebobina el historial, elimina el turno editado y todo lo posterior, envía la corrección y continúa desde ella. El servidor realiza la operación de forma transaccional: almacena temporalmente el streaming y restaura el historial original si la respuesta falla. Los mensajes de sesiones anteriores y los botones durante una respuesta quedan bloqueados. La caché pasó a v7 y pasaron 38 pruebas.
+- Falló: La primera espera de la prueba visual detectó la respuesta anterior antes de que terminase el segundo turno; se esperó al nuevo resultado y la interfaz quedó correcta. No hubo fallos funcionales durante la prueba real.
+- Decidido: Editar no genera gasto hasta pulsar «Guardar y rehacer». El coste ya consumido no se resta. Una edición correcta elimina todos los turnos posteriores porque dependían del texto antiguo; una edición fallida no modifica ni la pantalla ni el historial.
+- Siguiente: fase 23 — capturar audio del micrófono y guardarlo.
+
+## 2026-09-27 · Puerta del bloque 1 superada
+
+- Hecho: Se completó una conversación de 20 turnos coherentes desde la PWA del iPhone por 5G. ASTRO recordó y actualizó datos, corrigió afirmaciones falsas, utilizó correctamente `calcular` y `obtener_fecha_hora`, conservó qué herramientas había usado y mostró peticiones, tokens y coste acumulados. Después de incorporar la edición, se validaron mensajes normales, Cancelar, el rebobinado desde un turno antiguo y la continuidad sin reconexión.
+- Resultado: Bloque 1 completado. El núcleo de texto, las herramientas, la PWA privada, el registro de coste, las notificaciones, el respaldo de proveedor y la edición de historial funcionan juntos.
+- Siguiente: bloque 2, fase 23 — capturar audio del micrófono y guardarlo.

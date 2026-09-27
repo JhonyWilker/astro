@@ -8,6 +8,11 @@ from core.api import crear_app
 class SesionFalsa:
     def __init__(self) -> None:
         self.preguntas: list[str] = []
+        self.ediciones: list[tuple[int, str]] = []
+
+    @property
+    def cantidad_turnos(self) -> int:
+        return len(self.preguntas)
 
     def preguntar(self, pregunta: str, emitir_texto, emitir_cambio=None):
         self.preguntas.append(pregunta)
@@ -25,6 +30,16 @@ class SesionFalsa:
             modelo_final="modelo-prueba",
             cambios_proveedor=(),
         )
+
+    def editar_turno(
+        self,
+        indice: int,
+        pregunta: str,
+        emitir_texto,
+        emitir_cambio=None,
+    ):
+        self.ediciones.append((indice, pregunta))
+        return self.preguntar(pregunta, emitir_texto, emitir_cambio)
 
 
 class NucleoFalso:
@@ -197,8 +212,8 @@ def test_pagina_web() -> None:
     assert respuesta.status_code == 200
     assert "<title>ASTRO</title>" in respuesta.text
     assert 'rel="manifest"' in respuesta.text
-    assert 'src="/static/app.js?v=6"' in respuesta.text
-    assert 'href="/static/app.css?v=6"' in respuesta.text
+    assert 'src="/static/app.js?v=7"' in respuesta.text
+    assert 'href="/static/app.css?v=7"' in respuesta.text
 
 
 def test_manifiesto_pwa() -> None:
@@ -220,6 +235,8 @@ def test_recursos_pwa() -> None:
 
     assert javascript.status_code == 200
     assert "new WebSocket" in javascript.text
+    assert 'type: "edit"' in javascript.text
+    assert 'evento.type === "rewind"' in javascript.text
     assert "serviceWorker.register" in javascript.text
     assert 'addEventListener("push"' in service_worker.text
     assert "showNotification" in service_worker.text
@@ -256,3 +273,31 @@ def test_websocket_transmite_respuesta() -> None:
         }
     ]
     assert nucleo.sesion.preguntas == ["Salúdame"]
+
+
+def test_websocket_edita_y_rebobina_antes_de_responder() -> None:
+    nucleo = NucleoFalso()
+    with TestClient(crear_app(nucleo)) as cliente:
+        with cliente.websocket_connect("/ws") as websocket:
+            assert websocket.receive_json() == {"type": "ready"}
+            websocket.send_json(
+                {"type": "edit", "turn": 0, "text": "Texto corregido"}
+            )
+            assert websocket.receive_json() == {
+                "type": "rewind",
+                "turn": 0,
+                "text": "Texto corregido",
+            }
+            assert websocket.receive_json() == {
+                "type": "delta",
+                "text": "Hola, ",
+            }
+            assert websocket.receive_json() == {
+                "type": "delta",
+                "text": "Jhony.",
+            }
+            terminado = websocket.receive_json()
+
+    assert terminado["type"] == "done"
+    assert terminado["turn"] == 0
+    assert nucleo.sesion.ediciones == [(0, "Texto corregido")]

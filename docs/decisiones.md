@@ -143,3 +143,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Preparar cada ruta de forma independiente. Una ruta con clave o configuración ausente se marca como fallida y se omite; otra ruta disponible continúa el turno. Si ninguna puede prepararse, se genera un error controlado.
 - Motivo: La degradación de un proveedor no debe destruir la conversación ni impedir usar otro proveedor sano.
 - Consecuencia: El WebSocket permanece abierto y el historial se conserva ante este tipo de fallo de configuración.
+
+## 2026-09-27 · Edición transaccional del historial
+
+- Contexto: Corregir un mensaje antiguo cambia el contexto del que dependen todas las respuestas posteriores.
+- Decisión: Identificar los turnos de cada WebSocket y, al editar, reconstruir el historial hasta el turno anterior. La nueva respuesta se genera antes de confirmar el rebobinado visual; si falla, se restaura el historial original.
+- Motivo: Evitar conversaciones con dos versiones contradictorias y no perder mensajes ante un fallo de la API.
+- Consecuencia: Guardar una edición elimina la respuesta antigua y todos los turnos posteriores. Cancelar o sufrir un error no altera la conversación. El uso ya consumido continúa en el contador.

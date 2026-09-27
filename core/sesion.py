@@ -108,6 +108,10 @@ class SesionASTRO:
     nucleo: NucleoASTRO
     historial: list[dict[str, str]] = field(default_factory=list)
 
+    @property
+    def cantidad_turnos(self) -> int:
+        return len(self.historial) // 2
+
     def preguntar(
         self,
         pregunta: str,
@@ -151,6 +155,28 @@ class SesionASTRO:
             {"role": "assistant", "content": contenido_historial}
         )
         return resultado
+
+    def editar_turno(
+        self,
+        indice: int,
+        pregunta: str,
+        emitir_texto: EmitirTexto | None = None,
+        emitir_cambio: EmitirCambio | None = None,
+    ) -> ResultadoRespuesta:
+        if type(indice) is not int or not 0 <= indice < self.cantidad_turnos:
+            raise ValueError("El turno que intentas editar no existe")
+
+        historial_original = self.historial
+        self.historial = self.historial[: indice * 2]
+        try:
+            return self.preguntar(
+                pregunta,
+                emitir_texto,
+                emitir_cambio,
+            )
+        except Exception:
+            self.historial = historial_original
+            raise
 
 
 def crear_nucleo() -> NucleoASTRO:

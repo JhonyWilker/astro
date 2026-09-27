@@ -43,6 +43,10 @@ let tokensSesion = 0;
 let costeSesion = 0;
 let csrfIA = null;
 let proveedoresIA = {};
+let turnoSiguiente = 0;
+let turnoRespuesta = null;
+let sesionVisual = 0;
+let editorAbierto = null;
 
 function mostrarEstado(tipo, texto) { estado.className = `estado ${tipo}`; estadoTexto.textContent = texto; }
 function desplazar() { mensajes.scrollTo({ top: mensajes.scrollHeight, behavior: "smooth" }); }
@@ -54,19 +58,76 @@ function reiniciarUsoSesion() {
   uso.textContent = "";
   uso.hidden = true;
 }
-function agregarMensaje(texto, autor) {
+function agregarMensaje(texto, autor, turno = null) {
   ocultarBienvenida();
   const contenedor = document.createElement("article"); contenedor.className = `mensaje ${autor}`;
+  if (Number.isInteger(turno)) contenedor.dataset.turn = String(turno);
+  contenedor.dataset.session = String(sesionVisual);
   const burbuja = document.createElement("div"); burbuja.className = "burbuja";
+  const cabeceraMensaje = document.createElement("div"); cabeceraMensaje.className = "cabecera-mensaje";
   const etiqueta = document.createElement("span"); etiqueta.className = "autor"; etiqueta.textContent = autor === "jhony" ? "Jhony" : "ASTRO";
+  cabeceraMensaje.appendChild(etiqueta);
+  if (autor === "jhony" && Number.isInteger(turno)) {
+    contenedor.dataset.confirmed = "false";
+    const editar = document.createElement("button"); editar.className = "editar-mensaje"; editar.type = "button";
+    editar.textContent = "Editar"; editar.setAttribute("aria-label", "Editar mensaje"); editar.disabled = true;
+    cabeceraMensaje.appendChild(editar);
+  }
   const contenido = document.createElement("p"); contenido.className = "texto"; contenido.textContent = texto;
-  burbuja.append(etiqueta, contenido); contenedor.appendChild(burbuja); mensajes.appendChild(contenedor); desplazar(); return contenido;
+  burbuja.append(cabeceraMensaje, contenido); contenedor.appendChild(burbuja); mensajes.appendChild(contenedor); desplazar(); return contenido;
 }
 function agregarSistema(texto) { ocultarBienvenida(); const elemento = document.createElement("p"); elemento.className = "sistema"; elemento.textContent = texto; mensajes.appendChild(elemento); desplazar(); }
 function ajustarEntrada() { entrada.style.height = "auto"; entrada.style.height = `${Math.min(entrada.scrollHeight, 132)}px`; }
 function habilitarEntrada() {
   const conectado = socket && socket.readyState === WebSocket.OPEN;
   entrada.disabled = !conectado || respondiendo; enviar.disabled = !conectado || respondiendo || !entrada.value.trim();
+  document.querySelectorAll(".editar-mensaje").forEach((boton) => {
+    const mensaje = boton.closest(".mensaje");
+    boton.disabled = !conectado || respondiendo || Boolean(editorAbierto)
+      || mensaje.dataset.session !== String(sesionVisual)
+      || mensaje.dataset.confirmed !== "true";
+  });
+}
+function cancelarEdicion() {
+  if (!editorAbierto) return;
+  const { contenido, boton, formularioEdicion } = editorAbierto;
+  formularioEdicion.remove(); contenido.hidden = false; boton.hidden = false; editorAbierto = null; habilitarEntrada();
+}
+function iniciarEdicion(contenedor) {
+  const conectado = socket && socket.readyState === WebSocket.OPEN;
+  if (!conectado || respondiendo || editorAbierto || contenedor.dataset.session !== String(sesionVisual) || contenedor.dataset.confirmed !== "true") return;
+  const contenido = contenedor.querySelector(".texto");
+  const boton = contenedor.querySelector(".editar-mensaje");
+  const formularioEdicion = document.createElement("form"); formularioEdicion.className = "formulario-edicion";
+  const campo = document.createElement("textarea"); campo.value = contenido.textContent; campo.maxLength = 4000; campo.rows = 3;
+  campo.setAttribute("aria-label", "Corregir mensaje");
+  const aviso = document.createElement("p"); aviso.textContent = "La respuesta y los mensajes posteriores se reemplazarán.";
+  const acciones = document.createElement("div"); acciones.className = "acciones-edicion";
+  const cancelar = document.createElement("button"); cancelar.type = "button"; cancelar.className = "cancelar-edicion"; cancelar.textContent = "Cancelar";
+  const guardar = document.createElement("button"); guardar.type = "submit"; guardar.className = "guardar-edicion"; guardar.textContent = "Guardar y rehacer";
+  acciones.append(cancelar, guardar); formularioEdicion.append(campo, aviso, acciones);
+  contenido.hidden = true; boton.hidden = true; contenedor.querySelector(".burbuja").appendChild(formularioEdicion);
+  editorAbierto = { contenedor, contenido, boton, formularioEdicion, campo, guardar, cancelar };
+  cancelar.addEventListener("click", cancelarEdicion);
+  formularioEdicion.addEventListener("submit", (evento) => {
+    evento.preventDefault(); const texto = campo.value.trim();
+    if (!texto) { campo.focus(); return; }
+    if (texto === contenido.textContent) { cancelarEdicion(); return; }
+    respondiendo = true; campo.disabled = true; guardar.disabled = true; cancelar.disabled = true; guardar.textContent = "Corrigiendo…";
+    turnoRespuesta = Number(contenedor.dataset.turn); uso.hidden = true; habilitarEntrada();
+    socket.send(JSON.stringify({ type: "edit", turn: turnoRespuesta, text: texto }));
+  });
+  habilitarEntrada(); campo.focus(); campo.setSelectionRange(campo.value.length, campo.value.length);
+}
+function aplicarRebobinado(turno, texto) {
+  const objetivo = [...mensajes.querySelectorAll(".mensaje.jhony")].find((mensaje) =>
+    mensaje.dataset.session === String(sesionVisual) && Number(mensaje.dataset.turn) === turno
+  );
+  if (!objetivo) { cancelarEdicion(); agregarSistema("No pude localizar el mensaje que se corrigió."); return; }
+  let elemento = objetivo;
+  while (elemento) { const siguiente = elemento.nextSibling; elemento.remove(); elemento = siguiente; }
+  editorAbierto = null; turnoSiguiente = turno + 1; turnoRespuesta = turno;
+  agregarMensaje(texto, "jhony", turno); habilitarEntrada();
 }
 async function pedirJSON(url, opciones = {}) {
   const respuesta = await fetch(url, opciones);
@@ -167,13 +228,15 @@ function conectar() {
     if (evento.type === "ready") {
       mostrarEstado("conectado", "Conectado");
       if (huboConexion) {
+        sesionVisual += 1; turnoSiguiente = 0; turnoRespuesta = null; cancelarEdicion();
         agregarSistema("Conexión restablecida. Comienza una sesión nueva.");
         reiniciarUsoSesion();
       }
       huboConexion = true; esperaReconexion = 1000; respondiendo = false; habilitarEntrada(); entrada.focus(); return;
     }
+    if (evento.type === "rewind") { aplicarRebobinado(evento.turn, evento.text); return; }
     if (evento.type === "delta") {
-      if (!respuestaActual) respuestaActual = agregarMensaje("", "astro");
+      if (!respuestaActual) respuestaActual = agregarMensaje("", "astro", turnoRespuesta);
       respuestaActual.textContent += evento.text; desplazar(); return;
     }
     if (evento.type === "provider_change") {
@@ -195,21 +258,35 @@ function conectar() {
         estadoProveedor.textContent = proveedoresIA[evento.provider].name;
       }
       if (evento.model) estadoModelo.textContent = evento.model;
-      uso.hidden = false; respuestaActual = null; respondiendo = false; habilitarEntrada(); entrada.focus(); return;
+      const mensajeConfirmado = [...mensajes.querySelectorAll(".mensaje.jhony")].find((mensaje) =>
+        mensaje.dataset.session === String(sesionVisual) && Number(mensaje.dataset.turn) === evento.turn
+      );
+      if (mensajeConfirmado) mensajeConfirmado.dataset.confirmed = "true";
+      turnoSiguiente = Math.max(turnoSiguiente, Number(evento.turn) + 1);
+      editorAbierto = null; uso.hidden = false; respuestaActual = null; respondiendo = false; habilitarEntrada(); entrada.focus(); return;
     }
-    if (evento.type === "error") { agregarSistema(`Error: ${evento.message}`); respuestaActual = null; respondiendo = false; habilitarEntrada(); }
+    if (evento.type === "error") {
+      const eraEdicion = Boolean(editorAbierto); respondiendo = false;
+      if (eraEdicion) cancelarEdicion(); else if (Number.isInteger(turnoRespuesta)) turnoSiguiente = turnoRespuesta;
+      agregarSistema(`Error: ${evento.message}`); respuestaActual = null; habilitarEntrada();
+    }
   });
   socket.addEventListener("close", () => {
     if (respuestaActual) agregarSistema("La respuesta se interrumpió al perder la conexión.");
-    socket = null; respuestaActual = null; respondiendo = false; habilitarEntrada(); programarReconexion();
+    socket = null; respuestaActual = null; respondiendo = false; cancelarEdicion(); habilitarEntrada(); programarReconexion();
   });
   socket.addEventListener("error", () => mostrarEstado("desconectado", "Sin conexión"));
 }
 formulario.addEventListener("submit", (evento) => {
   evento.preventDefault(); const texto = entrada.value.trim();
   if (!texto || !socket || socket.readyState !== WebSocket.OPEN) return;
-  agregarMensaje(texto, "jhony"); socket.send(JSON.stringify({ type: "message", text: texto }));
+  turnoRespuesta = turnoSiguiente; turnoSiguiente += 1;
+  agregarMensaje(texto, "jhony", turnoRespuesta); socket.send(JSON.stringify({ type: "message", text: texto }));
   entrada.value = ""; ajustarEntrada(); respuestaActual = null; respondiendo = true; uso.hidden = true; habilitarEntrada();
+});
+mensajes.addEventListener("click", (evento) => {
+  const boton = evento.target.closest(".editar-mensaje");
+  if (boton) iniciarEdicion(boton.closest(".mensaje"));
 });
 entrada.addEventListener("input", () => { ajustarEntrada(); habilitarEntrada(); });
 entrada.addEventListener("keydown", (evento) => { if (evento.key === "Enter" && !evento.shiftKey) { evento.preventDefault(); formulario.requestSubmit(); } });
@@ -302,7 +379,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) cone
 if (window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone) instalar.hidden = true;
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/service-worker.js?v=6").catch(() => agregarSistema("La instalación sin conexión no está disponible."));
+    navigator.serviceWorker.register("/service-worker.js?v=7").catch(() => agregarSistema("La instalación sin conexión no está disponible."));
   });
 }
 pedirJSON("/push/public-key")

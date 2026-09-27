@@ -53,6 +53,12 @@ El botón «Estado» muestra si el núcleo está en línea, el proveedor y el mo
 
 Durante una conversación, la PWA acumula peticiones, tokens y coste desde que se abrió la conexión. Si el proveedor cambia por una caída o por su recuperación, aparece un aviso en el chat y la conversación conserva el historial de esa sesión.
 
+## Editar un mensaje
+
+Cada mensaje confirmado de Jhony muestra «Editar». «Cancelar» recupera el texto original sin realizar una petición. «Guardar y rehacer» sustituye ese turno y elimina su respuesta y todos los mensajes posteriores, porque dependían del texto antiguo. El coste de esas peticiones permanece en el total de la sesión.
+
+Mientras ASTRO responde no se puede editar. Después de una reconexión, los mensajes visibles de la sesión anterior quedan bloqueados porque su historial ya no existe en el nuevo WebSocket.
+
 En la PWA instalada del iPhone, «Activar notificaciones» solicita permiso mediante una acción expresa de Jhony y registra ese dispositivo para recibir avisos Web Push. «Enviar prueba» comprueba la entrega y «Desactivar en ASTRO» elimina la suscripción del servidor y del dispositivo.
 
 iOS solo admite estas notificaciones desde una app web añadida a la pantalla de inicio. ASTRO no guarda conversaciones en la suscripción: únicamente conserva los datos técnicos necesarios para entregar el aviso.

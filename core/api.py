@@ -93,6 +93,16 @@ def serializar_uso(registro: RegistroUso) -> dict[str, int | float]:
     }
 
 
+def serializar_cambio(cambio) -> dict[str, object]:
+    return {
+        "type": "provider_change",
+        "from": cambio.anterior,
+        "to": cambio.nuevo,
+        "reason": cambio.motivo,
+        "continued_partial": cambio.continuo_texto_parcial,
+    }
+
+
 def crear_app(
     nucleo: NucleoASTRO | None = None,
     notificaciones: ServicioNotificaciones | None = None,
@@ -306,11 +316,28 @@ def crear_app(
                     )
                     continue
 
+                if not isinstance(mensaje, dict):
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Envía un mensaje de texto no vacío.",
+                        }
+                    )
+                    continue
+
+                tipo = mensaje.get("type")
+                texto = mensaje.get("text")
+                turno_edicion = mensaje.get("turn")
+                es_edicion = (
+                    tipo == "edit"
+                    and type(turno_edicion) is int
+                    and turno_edicion >= 0
+                )
                 if (
-                    not isinstance(mensaje, dict)
-                    or mensaje.get("type") != "message"
-                    or not isinstance(mensaje.get("text"), str)
-                    or not mensaje["text"].strip()
+                    tipo not in {"message", "edit"}
+                    or not isinstance(texto, str)
+                    or not texto.strip()
+                    or (tipo == "edit" and not es_edicion)
                 ):
                     await websocket.send_json(
                         {
@@ -319,6 +346,13 @@ def crear_app(
                         }
                     )
                     continue
+
+                texto = texto.strip()
+                turno = (
+                    turno_edicion
+                    if es_edicion
+                    else sesion.cantidad_turnos
+                )
 
                 def emitir_texto(fragmento: str) -> None:
                     futuro = asyncio.run_coroutine_threadsafe(
@@ -331,28 +365,37 @@ def crear_app(
 
                 def emitir_cambio(cambio) -> None:
                     futuro = asyncio.run_coroutine_threadsafe(
-                        websocket.send_json(
-                            {
-                                "type": "provider_change",
-                                "from": cambio.anterior,
-                                "to": cambio.nuevo,
-                                "reason": cambio.motivo,
-                                "continued_partial": (
-                                    cambio.continuo_texto_parcial
-                                ),
-                            }
-                        ),
+                        websocket.send_json(serializar_cambio(cambio)),
                         bucle,
                     )
                     futuro.result()
 
+                eventos_edicion: list[dict[str, object]] = []
                 try:
-                    resultado = await asyncio.to_thread(
-                        sesion.preguntar,
-                        mensaje["text"],
-                        emitir_texto,
-                        emitir_cambio,
+                    if es_edicion:
+                        resultado = await asyncio.to_thread(
+                            sesion.editar_turno,
+                            turno,
+                            texto,
+                            lambda fragmento: eventos_edicion.append(
+                                {"type": "delta", "text": fragmento}
+                            ),
+                            lambda cambio: eventos_edicion.append(
+                                serializar_cambio(cambio)
+                            ),
+                        )
+                    else:
+                        resultado = await asyncio.to_thread(
+                            sesion.preguntar,
+                            texto,
+                            emitir_texto,
+                            emitir_cambio,
+                        )
+                except ValueError as error:
+                    await websocket.send_json(
+                        {"type": "error", "message": str(error)}
                     )
+                    continue
                 except (APIError, ErrorRespuestaASTRO) as error:
                     await websocket.send_json(
                         {
@@ -369,9 +412,17 @@ def crear_app(
                     )
                     continue
 
+                if es_edicion:
+                    await websocket.send_json(
+                        {"type": "rewind", "turn": turno, "text": texto}
+                    )
+                    for evento in eventos_edicion:
+                        await websocket.send_json(evento)
+
                 await websocket.send_json(
                     {
                         "type": "done",
+                        "turn": turno,
                         "usage": [
                             serializar_uso(registro)
                             for registro in resultado.registros

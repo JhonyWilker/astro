@@ -275,6 +275,84 @@ def test_sesion_conserva_herramientas_en_contexto_interno(
     )
 
 
+def test_editar_turno_rebobina_y_sustituye_historial(monkeypatch) -> None:
+    respuestas = iter(("Primera", "Segunda", "Corregida"))
+
+    def responder(*args):
+        return chat.ResultadoRespuesta(
+            texto=next(respuestas),
+            registros=(),
+            herramientas_usadas=(),
+        )
+
+    monkeypatch.setattr(sesion, "responder_con_rutas", responder)
+    nucleo = SimpleNamespace(
+        rutas_para_turno=lambda: (
+            chat.RutaIA(SimpleNamespace(), chat.cargar_configuracion()),
+        ),
+        personalidad="Personalidad de prueba",
+        registro=RegistroHerramientas.descubrir(),
+        registrar_fallo=lambda proveedor, error: None,
+        registrar_exito=lambda proveedor: None,
+    )
+    instancia = sesion.SesionASTRO(nucleo=nucleo)
+    instancia.preguntar("Mensaje uno")
+    instancia.preguntar("Mensaje dos")
+
+    resultado = instancia.editar_turno(0, "Mensaje corregido")
+
+    assert resultado.texto == "Corregida"
+    assert instancia.cantidad_turnos == 1
+    assert instancia.historial == [
+        {"role": "user", "content": "Mensaje corregido"},
+        {"role": "assistant", "content": "Corregida"},
+    ]
+
+
+def test_editar_turno_fallido_restaura_historial(monkeypatch) -> None:
+    historial = [
+        {"role": "user", "content": "Original"},
+        {"role": "assistant", "content": "Respuesta original"},
+    ]
+    instancia = sesion.SesionASTRO(
+        nucleo=SimpleNamespace(
+            rutas_para_turno=lambda: (),
+            personalidad="Personalidad de prueba",
+            registro=RegistroHerramientas.descubrir(),
+            registrar_fallo=lambda proveedor, error: None,
+            registrar_exito=lambda proveedor: None,
+        ),
+        historial=list(historial),
+    )
+    monkeypatch.setattr(
+        sesion,
+        "responder_con_rutas",
+        lambda *args: (_ for _ in ()).throw(ErrorRespuestaASTRO()),
+    )
+    monkeypatch.setattr(sesion, "guardar_registro_error", lambda registro: None)
+
+    with pytest.raises(ErrorRespuestaASTRO):
+        instancia.editar_turno(0, "Corrección fallida")
+
+    assert instancia.historial == historial
+
+
+def test_editar_turno_inexistente_no_cambia_historial() -> None:
+    historial = [
+        {"role": "user", "content": "Original"},
+        {"role": "assistant", "content": "Respuesta original"},
+    ]
+    instancia = sesion.SesionASTRO(
+        nucleo=SimpleNamespace(),
+        historial=list(historial),
+    )
+
+    with pytest.raises(ValueError, match="no existe"):
+        instancia.editar_turno(2, "Imposible")
+
+    assert instancia.historial == historial
+
+
 def crear_nucleo_con_rutas(
     rutas: tuple[str, ...],
 ) -> tuple[sesion.NucleoASTRO, list[tuple[str, str]]]:
