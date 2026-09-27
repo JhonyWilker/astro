@@ -150,3 +150,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Identificar los turnos de cada WebSocket y, al editar, reconstruir el historial hasta el turno anterior. La nueva respuesta se genera antes de confirmar el rebobinado visual; si falla, se restaura el historial original.
 - Motivo: Evitar conversaciones con dos versiones contradictorias y no perder mensajes ante un fallo de la API.
 - Consecuencia: Guardar una edición elimina la respuesta antigua y todos los turnos posteriores. Cancelar o sufrir un error no altera la conversación. El uso ya consumido continúa en el contador.
+
+## 2026-09-27 · Captura de voz local y separada del cerebro
+
+- Contexto: El cerebro de ASTRO vive en el VPS, pero el VPS no puede oír el entorno físico de Jhony; el audio debe capturarse en el portátil y, más adelante, en los nodos locales de casa.
+- Decisión: Capturar con `sounddevice` mediante `RawInputStream`, guardar WAV mono PCM de 16 bits a la frecuencia nativa del micrófono y mantener la dependencia en `requirements-voice.txt`. Las grabaciones se guardan bajo `data/audio`, fuera de Git.
+- Motivo: Obtener un formato estándar compatible con la futura transcripción, sin necesitar NumPy ni instalar controladores de audio en el VPS.
+- Consecuencia: Cada nodo de voz instalará sus dependencias locales y elegirá una entrada disponible. En el portátil de Jhony, WASAPI capturó correctamente a 48 kHz; los índices pueden cambiar al conectar dispositivos.

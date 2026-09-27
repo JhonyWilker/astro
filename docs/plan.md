@@ -172,7 +172,7 @@ Objetivo: hablar con ASTRO diciendo solo "Astro", en conversación continua, con
 
 | Fase | Qué se hace | Criterio de salida |
 | --- | --- | --- |
-| 23 | Capturar audio del micrófono y guardarlo | Archivo de audio grabado |
+| 23 | ✅ Capturar audio del micrófono y guardarlo | Archivo de audio grabado |
 | 24 | Voz a texto con faster-whisper | Transcripción correcta en español |
 | 25 | Texto a voz con Piper | ASTRO lee una frase en voz alta |
 | 26 | Pulsar tecla → hablar → respuesta hablada | Primera conversación por voz |
@@ -419,7 +419,7 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **23 — Capturar audio del micrófono y guardarlo.** Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **24 — Voz a texto con faster-whisper.** Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |

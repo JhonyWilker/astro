@@ -62,3 +62,27 @@ Mientras ASTRO responde no se puede editar. Después de una reconexión, los men
 En la PWA instalada del iPhone, «Activar notificaciones» solicita permiso mediante una acción expresa de Jhony y registra ese dispositivo para recibir avisos Web Push. «Enviar prueba» comprueba la entrega y «Desactivar en ASTRO» elimina la suscripción del servidor y del dispositivo.
 
 iOS solo admite estas notificaciones desde una app web añadida a la pantalla de inicio. ASTRO no guarda conversaciones en la suscripción: únicamente conserva los datos técnicos necesarios para entregar el aviso.
+
+## Grabación de voz local
+
+La captura del micrófono se ejecuta en el equipo que físicamente oye a Jhony, no en el VPS. Instala su dependencia opcional dentro del entorno virtual:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-voice.txt
+```
+
+Para ver las entradas disponibles:
+
+```powershell
+.\.venv\Scripts\python.exe -m clients.grabar_audio --listar
+```
+
+Para grabar cinco segundos:
+
+```powershell
+.\.venv\Scripts\python.exe -m clients.grabar_audio --segundos 5
+```
+
+Se puede elegir otra entrada añadiendo `--dispositivo NUMERO`. En el portátil de Jhony, la entrada WASAPI número 12 capturó correctamente a 48 kHz durante la prueba de la fase 23. El número puede cambiar al conectar o desconectar dispositivos, por lo que debe comprobarse de nuevo con `--listar`.
+
+El resultado predeterminado es `data/audio/prueba.wav`, en formato WAV mono PCM de 16 bits. La carpeta `data` está excluida de Git porque puede contener voz privada.

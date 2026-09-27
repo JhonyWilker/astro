@@ -7,3 +7,5 @@ Ejecutar desde la raíz del proyecto:
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
 ```
+
+Las pruebas de audio usan un micrófono simulado: comprueban el formato WAV, la duración y los límites sin acceder al micrófono real. La captura física se valida por separado en el equipo local.
