@@ -13,8 +13,8 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/icon.svg">
-  <link rel="stylesheet" href="/static/app.css?v=9">
-  <script src="/static/app.js?v=9" defer></script>
+  <link rel="stylesheet" href="/static/app.css?v=10">
+  <script src="/static/app.js?v=10" defer></script>
 </head>
 <body>
   <div class="app">
@@ -98,20 +98,32 @@
           <p id="resultado-ia" role="status"></p>
         </form>
       </section>
-      <section id="vinculacion" class="vinculacion" hidden>
-        <h3>Añadir dispositivo</h3>
-        <p>Crea un acceso de un solo uso. Caduca en cinco minutos.</p>
-        <form id="formulario-vinculacion" class="formulario-ajustes">
-          <label>Nombre del dispositivo<input id="nombre-vinculacion" maxlength="60" autocomplete="off" placeholder="Tablet del restaurante" required></label>
-          <button id="crear-vinculacion" class="boton-accion" type="submit">Crear QR y código</button>
-          <p id="resultado-vinculacion" role="status"></p>
-        </form>
-        <div id="credencial-vinculacion" class="credencial-vinculacion" hidden>
-          <img id="qr-vinculacion" alt="Código QR para vincular el dispositivo">
-          <p>O escribe este código en el dispositivo nuevo:</p>
-          <output id="codigo-vinculacion"></output>
-          <p id="caducidad-vinculacion"></p>
+      <section id="gestion-dispositivos" class="gestion-dispositivos" hidden>
+        <h3>Dispositivos</h3>
+        <button id="mostrar-vinculacion" class="boton-accion" type="button">Añadir dispositivo</button>
+        <div id="vinculacion" class="vinculacion" hidden>
+          <p>Crea un acceso de un solo uso. Caduca en cinco minutos.</p>
+          <form id="formulario-vinculacion" class="formulario-ajustes">
+            <label>Nombre del dispositivo<input id="nombre-vinculacion" maxlength="60" autocomplete="off" placeholder="Tablet del restaurante" required></label>
+            <label>Permisos
+              <select id="rol-vinculacion">
+                <option value="administrador">Administrador personal — todos tus datos y ajustes</option>
+                <option value="personal">Personal — tus datos, sin administrar ASTRO</option>
+                <option value="restringido">Restringido — aislado de tus datos</option>
+              </select>
+            </label>
+            <button id="crear-vinculacion" class="boton-accion" type="submit">Crear QR y código</button>
+            <p id="resultado-vinculacion" role="status"></p>
+          </form>
+          <div id="credencial-vinculacion" class="credencial-vinculacion" hidden>
+            <img id="qr-vinculacion" alt="Código QR para vincular el dispositivo">
+            <p>O escribe este código en el dispositivo nuevo:</p>
+            <output id="codigo-vinculacion"></output>
+            <p id="caducidad-vinculacion"></p>
+          </div>
         </div>
+        <h4>Dispositivos conocidos</h4>
+        <div id="lista-dispositivos" class="lista-dispositivos" aria-live="polite"></div>
       </section>
       <section class="notificaciones">
         <h3>Notificaciones</h3>

@@ -33,15 +33,19 @@ const estadoNotificaciones = document.querySelector("#estado-notificaciones");
 const activarPush = document.querySelector("#activar-push");
 const probarPush = document.querySelector("#probar-push");
 const desactivarPush = document.querySelector("#desactivar-push");
+const gestionDispositivos = document.querySelector("#gestion-dispositivos");
+const mostrarVinculacion = document.querySelector("#mostrar-vinculacion");
 const vinculacion = document.querySelector("#vinculacion");
 const formularioVinculacion = document.querySelector("#formulario-vinculacion");
 const nombreVinculacion = document.querySelector("#nombre-vinculacion");
+const rolVinculacion = document.querySelector("#rol-vinculacion");
 const crearVinculacion = document.querySelector("#crear-vinculacion");
 const resultadoVinculacion = document.querySelector("#resultado-vinculacion");
 const credencialVinculacion = document.querySelector("#credencial-vinculacion");
 const qrVinculacion = document.querySelector("#qr-vinculacion");
 const codigoVinculacion = document.querySelector("#codigo-vinculacion");
 const caducidadVinculacion = document.querySelector("#caducidad-vinculacion");
+const listaDispositivos = document.querySelector("#lista-dispositivos");
 let socket = null;
 let respuestaActual = null;
 let respondiendo = false;
@@ -250,14 +254,17 @@ async function actualizarPanel() {
     estadoDispositivo.textContent = datos.device.name;
     esAdministrador = Boolean(datos.device.administrator);
     ajustesIA.hidden = !esAdministrador;
-    vinculacion.hidden = !esAdministrador;
+    gestionDispositivos.hidden = !esAdministrador;
     estadoEnrutador.textContent = datos.ai.degraded
       ? `Modo respaldo. Se volverá a probar el principal en ${datos.ai.retry_in_seconds} s.`
       : "Proveedor principal activo.";
   } catch {
     estadoNucleo.textContent = "No disponible";
   }
-  if (esAdministrador) await cargarAjustesIA();
+  if (esAdministrador) {
+    await cargarAjustesIA();
+    await cargarDispositivos();
+  }
   await actualizarEstadoPush();
 }
 function llenarProveedor(select, proveedores, elegido) {
@@ -463,7 +470,10 @@ formularioVinculacion.addEventListener("submit", async (evento) => {
     const datos = await pedirJSON("/auth/pairings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nombre: nombreVinculacion.value.trim() }),
+      body: JSON.stringify({
+        nombre: nombreVinculacion.value.trim(),
+        rol: rolVinculacion.value,
+      }),
     });
     qrVinculacion.src = datos.qr_data_uri;
     codigoVinculacion.textContent = datos.code;
@@ -476,6 +486,100 @@ formularioVinculacion.addEventListener("submit", async (evento) => {
     crearVinculacion.disabled = false;
   }
 });
+mostrarVinculacion.addEventListener("click", () => {
+  vinculacion.hidden = !vinculacion.hidden;
+  mostrarVinculacion.textContent = vinculacion.hidden
+    ? "Añadir dispositivo"
+    : "Cerrar alta";
+});
+
+const nombresRoles = {
+  administrador: "Administrador personal",
+  personal: "Personal",
+  restringido: "Restringido",
+};
+
+function crearSelectorRol(dispositivo) {
+  const selector = document.createElement("select");
+  selector.setAttribute("aria-label", `Rol de ${dispositivo.name}`);
+  for (const [valor, etiqueta] of Object.entries(nombresRoles)) {
+    const opcion = document.createElement("option");
+    opcion.value = valor;
+    opcion.textContent = etiqueta;
+    selector.append(opcion);
+  }
+  selector.value = dispositivo.role;
+  selector.disabled = dispositivo.current;
+  return selector;
+}
+
+async function cargarDispositivos() {
+  try {
+    const datos = await pedirJSON("/auth/devices");
+    listaDispositivos.replaceChildren();
+    for (const dispositivo of datos.devices) {
+      const tarjeta = document.createElement("article");
+      tarjeta.className = "dispositivo-item";
+      if (dispositivo.revoked) tarjeta.classList.add("revocado");
+      const cabecera = document.createElement("div");
+      const nombre = document.createElement("strong");
+      nombre.textContent = dispositivo.name;
+      const detalle = document.createElement("small");
+      detalle.textContent = dispositivo.current
+        ? "Este dispositivo"
+        : dispositivo.revoked
+          ? "Revocado"
+          : dispositivo.source === "inicial" ? "Inicial" : "Vinculado";
+      cabecera.append(nombre, detalle);
+      const selector = crearSelectorRol(dispositivo);
+      tarjeta.append(cabecera, selector);
+      if (!dispositivo.current) {
+        const acciones = document.createElement("div");
+        acciones.className = "acciones-dispositivo";
+        const guardar = document.createElement("button");
+        guardar.type = "button";
+        guardar.textContent = dispositivo.revoked ? "Reactivar" : "Guardar rol";
+        guardar.addEventListener("click", async () => {
+          guardar.disabled = true;
+          try {
+            await pedirJSON(`/auth/devices/${encodeURIComponent(dispositivo.id)}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ rol: selector.value }),
+            });
+            await cargarDispositivos();
+          } catch (error) {
+            agregarSistema(error.message);
+            guardar.disabled = false;
+          }
+        });
+        const revocar = document.createElement("button");
+        revocar.type = "button";
+        revocar.className = "boton-peligro";
+        revocar.textContent = "Revocar";
+        revocar.hidden = dispositivo.revoked;
+        revocar.addEventListener("click", async () => {
+          if (!window.confirm(`¿Revocar ${dispositivo.name}? Dejará de acceder a ASTRO.`)) return;
+          revocar.disabled = true;
+          try {
+            await pedirJSON(`/auth/devices/${encodeURIComponent(dispositivo.id)}`, {
+              method: "DELETE",
+            });
+            await cargarDispositivos();
+          } catch (error) {
+            agregarSistema(error.message);
+            revocar.disabled = false;
+          }
+        });
+        acciones.append(guardar, revocar);
+        tarjeta.append(acciones);
+      }
+      listaDispositivos.append(tarjeta);
+    }
+  } catch (error) {
+    listaDispositivos.textContent = error.message;
+  }
+}
 activarPush.addEventListener("click", async () => {
   try {
     const permiso = await Notification.requestPermission();
@@ -520,7 +624,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) cone
 if (window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone) instalar.hidden = true;
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/service-worker.js?v=9").catch(() => agregarSistema("La instalación sin conexión no está disponible."));
+    navigator.serviceWorker.register("/service-worker.js?v=10").catch(() => agregarSistema("La instalación sin conexión no está disponible."));
   });
 }
 async function iniciarAplicacion() {

@@ -5,6 +5,7 @@ from io import BytesIO
 from pathlib import Path
 from secrets import compare_digest, token_urlsafe
 from time import monotonic
+from typing import Literal
 from typing import AsyncIterator
 
 from fastapi import (
@@ -64,10 +65,15 @@ class EndpointPush(BaseModel):
 
 class NuevaVinculacion(BaseModel):
     nombre: str = Field(min_length=1, max_length=60)
+    rol: Literal["administrador", "personal", "restringido"] = "administrador"
 
 
 class ReclamarVinculacion(BaseModel):
     codigo: str = Field(min_length=8, max_length=12)
+
+
+class CambioRolDispositivo(BaseModel):
+    rol: Literal["administrador", "personal", "restringido"]
 
 
 class AjustesIAEntrada(BaseModel):
@@ -164,6 +170,7 @@ def crear_app(
             codigo, caduca_en = acceso.crear_vinculacion(
                 entrada.nombre,
                 request.state.dispositivo.usuario,
+                entrada.rol,
             )
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
@@ -204,8 +211,52 @@ def crear_app(
             raise HTTPException(status_code=400, detail=str(error)) from error
         return respuesta_con_cookie(
             dispositivo,
-            {"authenticated": True, "device": dispositivo.nombre},
+            {
+                "authenticated": True,
+                "device": dispositivo.nombre,
+                "role": dispositivo.rol,
+            },
         )
+
+    @aplicacion.get("/auth/devices")
+    async def listar_dispositivos(request: Request):
+        return {
+            "devices": acceso.listar_dispositivos(
+                request.state.dispositivo.identificador,
+            ),
+        }
+
+    @aplicacion.patch("/auth/devices/{identificador}")
+    async def cambiar_rol_dispositivo(
+        identificador: str,
+        entrada: CambioRolDispositivo,
+        request: Request,
+    ):
+        try:
+            acceso.cambiar_rol(
+                identificador,
+                entrada.rol,
+                request.state.dispositivo.usuario,
+                request.state.dispositivo.identificador,
+            )
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail=str(error.args[0])) from error
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        return {"updated": True}
+
+    @aplicacion.delete("/auth/devices/{identificador}")
+    async def revocar_dispositivo(identificador: str, request: Request):
+        try:
+            acceso.revocar(
+                identificador,
+                request.state.dispositivo.identificador,
+            )
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail=str(error.args[0])) from error
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        return {"revoked": True}
 
     @aplicacion.post("/auth/logout")
     async def logout():
@@ -250,6 +301,7 @@ def crear_app(
             "device": {
                 "name": request.state.dispositivo.nombre,
                 "administrator": request.state.dispositivo.administrador,
+                "role": request.state.dispositivo.rol,
             },
             "push": {
                 "configured": servicio.configurado,

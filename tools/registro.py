@@ -45,6 +45,13 @@ class RegistroHerramientas:
     def listar(self) -> tuple[Herramienta, ...]:
         return tuple(self._herramientas.values())
 
+    def filtrar(self, nombres: set[str]) -> "RegistroHerramientas":
+        return RegistroHerramientas([
+            herramienta
+            for nombre, herramienta in self._herramientas.items()
+            if nombre in nombres
+        ])
+
     def definiciones_api(self) -> list[dict[str, object]]:
         return [
             herramienta.definicion_api()

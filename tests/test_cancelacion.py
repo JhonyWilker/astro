@@ -24,7 +24,7 @@ def test_cancelar_turno_activo_conserva_solo_prefijo_confirmado(monkeypatch):
         registrar_fallo=lambda *args: None, registrar_exito=lambda *args: None,
     )
     sesion = SesionASTRO(nucleo)
-    nucleo.nueva_sesion = lambda: sesion
+    nucleo.nueva_sesion = lambda restringida=False: sesion
     token = "falso-token-para-prueba-de-cancelacion"
     acceso = Acceso([Dispositivo("pc", "jhony", token)])
     app = crear_app(nucleo, SimpleNamespace(), acceso)

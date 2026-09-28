@@ -10,7 +10,9 @@ from starlette.websockets import WebSocketDisconnect
 from core.acceso import Acceso, Dispositivo
 from core.api import crear_app
 from core.conversaciones import Conversaciones
+from core.sesion import NucleoASTRO
 from core.turno import ControlTurno, TurnoCancelado
+from tools.registro import RegistroHerramientas
 from tests.test_api import NucleoFalso, NotificacionesFalsas
 
 
@@ -120,7 +122,8 @@ def test_vinculacion_por_codigo_es_unica_persistente_y_sin_token(tmp_path):
     assert estado.status_code == 200
     assert estado.json()["device"] == {
         "name": "Tablet nueva",
-        "administrator": False,
+        "administrator": True,
+        "role": "administrador",
     }
     assert repetida.status_code == 400
     assert token_nuevo not in ruta.read_text(encoding="utf-8")
@@ -131,7 +134,148 @@ def test_vinculacion_por_codigo_es_unica_persistente_y_sin_token(tmp_path):
     )
     recuperado = reiniciado.identificar(token_nuevo)
     assert recuperado.nombre == "Tablet nueva"
-    assert not recuperado.administrador
+    assert recuperado.administrador
+
+
+@pytest.mark.parametrize(
+    ("rol", "es_administrador", "comparte_usuario"),
+    [
+        ("administrador", True, True),
+        ("personal", False, True),
+        ("restringido", False, False),
+    ],
+)
+def test_roles_definen_permiso_e_identidad(
+    tmp_path,
+    rol,
+    es_administrador,
+    comparte_usuario,
+):
+    acceso = Acceso(ruta_registro=tmp_path / "dispositivos.json")
+    codigo, _ = acceso.crear_vinculacion("Nuevo", "jhony", rol)
+    dispositivo = acceso.reclamar_vinculacion(codigo, f"prueba-{rol}")
+
+    assert dispositivo.rol == rol
+    assert dispositivo.administrador is es_administrador
+    assert (dispositivo.usuario == "jhony") is comparte_usuario
+
+
+def test_administracion_cambia_aisla_reactiva_y_revoca(tmp_path):
+    ruta = tmp_path / "dispositivos.json"
+    token_secundario = "credencial-secundaria-ficticia-1234567890"
+    acceso = Acceso(
+        [
+            Dispositivo("actual", "jhony", TOKEN, True),
+            Dispositivo("secundario", "jhony", token_secundario),
+        ],
+        [ORIGEN],
+        ruta,
+    )
+    app = crear_app(NucleoFalso(), NotificacionesFalsas(), acceso)
+    with TestClient(
+        app,
+        base_url=ORIGEN,
+        headers={"Authorization": f"Bearer {TOKEN}", "Origin": ORIGEN},
+    ) as administrador:
+        inventario = administrador.get("/auth/devices")
+        dispositivos = inventario.json()["devices"]
+        secundario = next(item for item in dispositivos if item["name"] == "secundario")
+        actual = next(item for item in dispositivos if item["current"])
+        restringido = administrador.patch(
+            f"/auth/devices/{secundario['id']}",
+            json={"rol": "restringido"},
+        )
+        autorrol = administrador.patch(
+            f"/auth/devices/{actual['id']}",
+            json={"rol": "personal"},
+        )
+        autorrevocacion = administrador.delete(f"/auth/devices/{actual['id']}")
+
+    assert inventario.status_code == 200
+    assert all(
+        not {"token", "huella", "usuario"}.intersection(item)
+        for item in dispositivos
+    )
+    assert restringido.status_code == 200
+    aislado = acceso.identificar(token_secundario)
+    assert aislado.rol == "restringido"
+    assert aislado.usuario != "jhony"
+    assert autorrol.status_code == 400
+    assert autorrevocacion.status_code == 400
+
+    with TestClient(
+        app,
+        base_url=ORIGEN,
+        headers={"Authorization": f"Bearer {token_secundario}", "Origin": ORIGEN},
+    ) as limitado:
+        assert limitado.get("/auth/devices").status_code == 403
+
+    with TestClient(
+        app,
+        base_url=ORIGEN,
+        headers={"Authorization": f"Bearer {TOKEN}", "Origin": ORIGEN},
+    ) as administrador:
+        assert administrador.patch(
+            f"/auth/devices/{secundario['id']}",
+            json={"rol": "personal"},
+        ).status_code == 200
+        assert acceso.identificar(token_secundario).usuario == "jhony"
+        assert administrador.delete(f"/auth/devices/{secundario['id']}").status_code == 200
+
+    assert acceso.identificar(token_secundario) is None
+    reiniciado = Acceso(
+        [
+            Dispositivo("actual", "jhony", TOKEN, True),
+            Dispositivo("secundario", "jhony", token_secundario),
+        ],
+        [ORIGEN],
+        ruta,
+    )
+    assert reiniciado.identificar(token_secundario) is None
+
+
+def test_cambio_de_rol_cierra_socket_con_identidad_anterior(tmp_path):
+    token_secundario = "credencial-secundaria-para-socket-123456789"
+    acceso = Acceso(
+        [
+            Dispositivo("actual", "jhony", TOKEN, True),
+            Dispositivo("secundario", "jhony", token_secundario),
+        ],
+        [ORIGEN],
+        tmp_path / "dispositivos.json",
+    )
+    app = crear_app(NucleoFalso(), NotificacionesFalsas(), acceso)
+    secundario = acceso.identificar(token_secundario)
+    with TestClient(
+        app,
+        headers={"Authorization": f"Bearer {token_secundario}"},
+    ) as cliente:
+        with cliente.websocket_connect("/ws") as websocket:
+            assert websocket.receive_json()["type"] == "ready"
+            acceso.cambiar_rol(
+                secundario.identificador,
+                "restringido",
+                "jhony",
+                "otro-administrador",
+            )
+            websocket.send_json({"type": "message", "text": "Privado"})
+            with pytest.raises(WebSocketDisconnect) as error:
+                websocket.receive_json()
+            assert error.value.code == 1008
+
+
+def test_sesion_restringida_usa_personalidad_neutra_y_herramientas_seguras():
+    nucleo = SimpleNamespace(
+        personalidad_restringida="No conoces datos de Jhony.",
+        registro=RegistroHerramientas.descubrir(),
+    )
+    sesion = NucleoASTRO.nueva_sesion(nucleo, restringida=True)
+
+    assert sesion.personalidad == "No conoces datos de Jhony."
+    assert {item.nombre for item in sesion.registro.listar()} == {
+        "calcular",
+        "obtener_fecha_hora",
+    }
 
 
 def test_dispositivo_normal_no_puede_crear_vinculaciones():
@@ -166,11 +310,15 @@ def test_limite_de_frecuencia():
 
 def test_conversacion_reutilizada_y_aislada_por_usuario():
     almacén = Conversaciones()
-    nucleo = SimpleNamespace(nueva_sesion=lambda: SimpleNamespace(historial=[]))
+    modos = []
+    nucleo = SimpleNamespace(nueva_sesion=lambda restringida=False: (
+        modos.append(restringida) or SimpleNamespace(historial=[])
+    ))
     una = almacén.obtener("jhony", nucleo)
     una.sesion.historial.append({"role": "user", "content": "Privado"})
     assert almacén.obtener("jhony", nucleo) is una
-    assert almacén.obtener("otro", nucleo).historial() == []
+    assert almacén.obtener("otro", nucleo, restringida=True).historial() == []
+    assert modos == [False, True]
 
 
 def test_ws_reconexion_conserva_identificador():

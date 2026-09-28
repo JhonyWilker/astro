@@ -10,6 +10,7 @@ from core.chat import (
     RutaIA,
     cargar_configuracion,
     cargar_personalidad,
+    cargar_personalidad_restringida,
     crear_cliente,
     es_error_reintentable,
     responder_con_rutas,
@@ -32,10 +33,17 @@ class NucleoASTRO:
     personalidad: str
     registro: RegistroHerramientas
     ajustes_ia: ServicioAjustesIA
+    personalidad_restringida: str = ""
     clientes: dict[str, OpenAI] = field(default_factory=dict)
 
-    def nueva_sesion(self) -> "SesionASTRO":
-        return SesionASTRO(nucleo=self)
+    def nueva_sesion(self, restringida=False) -> "SesionASTRO":
+        if not restringida:
+            return SesionASTRO(nucleo=self)
+        return SesionASTRO(
+            nucleo=self,
+            personalidad=self.personalidad_restringida,
+            registro=self.registro.filtrar({"calcular", "obtener_fecha_hora"}),
+        )
 
     def configuracion_para(self, proveedor: str) -> Configuracion:
         ajustes = self.ajustes_ia.obtener()
@@ -107,6 +115,8 @@ class NucleoASTRO:
 @dataclass
 class SesionASTRO:
     nucleo: NucleoASTRO
+    personalidad: str | None = None
+    registro: RegistroHerramientas | None = None
     historial: list[dict[str, str]] = field(default_factory=list)
     herramientas_por_turno: list[tuple[str, ...]] = field(default_factory=list)
 
@@ -130,8 +140,8 @@ class SesionASTRO:
             resultado = responder_con_rutas(
                 self.nucleo.rutas_para_turno(),
                 self.historial,
-                self.nucleo.personalidad,
-                self.nucleo.registro,
+                self.personalidad or self.nucleo.personalidad,
+                self.registro or self.nucleo.registro,
                 emitir_texto,
                 emitir_cambio,
                 self.nucleo.registrar_fallo,
@@ -217,4 +227,5 @@ def crear_nucleo() -> NucleoASTRO:
             proveedores=set(configuracion.proveedores),
             ajustes_predeterminados=ajustes,
         ),
+        personalidad_restringida=cargar_personalidad_restringida(),
     )

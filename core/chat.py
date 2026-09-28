@@ -44,6 +44,9 @@ RUTA_CONFIG = Path(__file__).resolve().parents[1] / "config" / "config.yaml"
 RUTA_PERSONALIDAD = (
     Path(__file__).resolve().parents[1] / "config" / "personality.md"
 )
+RUTA_PERSONALIDAD_RESTRINGIDA = (
+    Path(__file__).resolve().parents[1] / "config" / "personality-restricted.md"
+)
 
 EmitirTexto = Callable[[str], None]
 
@@ -352,6 +355,13 @@ def cargar_personalidad() -> str:
     personalidad = RUTA_PERSONALIDAD.read_text(encoding="utf-8").strip()
     if not personalidad:
         raise RuntimeError("El archivo config/personality.md está vacío")
+    return personalidad
+
+
+def cargar_personalidad_restringida() -> str:
+    personalidad = RUTA_PERSONALIDAD_RESTRINGIDA.read_text(encoding="utf-8").strip()
+    if not personalidad:
+        raise RuntimeError("El archivo config/personality-restricted.md está vacío")
     return personalidad
 
 

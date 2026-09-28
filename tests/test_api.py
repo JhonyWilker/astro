@@ -89,7 +89,7 @@ class NucleoFalso:
             ],
         }
 
-    def nueva_sesion(self) -> SesionFalsa:
+    def nueva_sesion(self, restringida=False) -> SesionFalsa:
         return self.sesion
 
     def estado_ia(self) -> dict:
@@ -166,6 +166,7 @@ def test_panel_de_estado() -> None:
     assert respuesta.json()["device"] == {
         "name": "prueba",
         "administrator": True,
+        "role": "administrador",
     }
 
 
@@ -230,8 +231,8 @@ def test_pagina_web() -> None:
     assert respuesta.status_code == 200
     assert "<title>ASTRO</title>" in respuesta.text
     assert 'rel="manifest"' in respuesta.text
-    assert 'src="/static/app.js?v=9"' in respuesta.text
-    assert 'href="/static/app.css?v=9"' in respuesta.text
+    assert 'src="/static/app.js?v=10"' in respuesta.text
+    assert 'href="/static/app.css?v=10"' in respuesta.text
 
 
 def test_manifiesto_pwa() -> None:
@@ -257,6 +258,9 @@ def test_recursos_pwa() -> None:
     assert 'evento.type === "rewind"' in javascript.text
     assert '"/auth/pairings"' in javascript.text
     assert '"/auth/pair/claim"' in javascript.text
+    assert '"/auth/devices"' in javascript.text
+    assert 'method: "PATCH"' in javascript.text
+    assert 'method: "DELETE"' in javascript.text
     assert "serviceWorker.register" in javascript.text
     assert 'addEventListener("push"' in service_worker.text
     assert "showNotification" in service_worker.text

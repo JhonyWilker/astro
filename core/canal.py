@@ -6,6 +6,7 @@ from time import monotonic
 
 from fastapi import WebSocketDisconnect
 
+from core.acceso import ROL_RESTRINGIDO
 from core.turno import ControlTurno, TurnoCancelado
 
 
@@ -14,7 +15,11 @@ async def atender(
     explicar_error,
 ):
     dispositivo = websocket.state.dispositivo
-    conversacion = conversaciones.obtener(dispositivo.usuario, websocket.app.state.nucleo)
+    conversacion = conversaciones.obtener(
+        dispositivo.usuario,
+        websocket.app.state.nucleo,
+        restringida=dispositivo.rol == ROL_RESTRINGIDO,
+    )
     sesion = conversacion.sesion
     await websocket.accept()
     websocket.app.state.conexiones += 1
@@ -116,6 +121,14 @@ async def atender(
                 break
             if len(raw.encode()) > 16384:
                 await websocket.close(code=1009)
+                break
+            dispositivo_actual = acceso.identificar(dispositivo.token)
+            if (
+                dispositivo_actual is None
+                or dispositivo_actual.usuario != dispositivo.usuario
+                or dispositivo_actual.rol != dispositivo.rol
+            ):
+                await websocket.close(code=1008)
                 break
             if not acceso.permitir((dispositivo.nombre, "frames"), 900):
                 await websocket.close(code=1008)

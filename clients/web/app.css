@@ -87,7 +87,7 @@ textarea:disabled { opacity: 0.55; }
 .rejilla-estado div { padding: 13px; border: 1px solid var(--linea); border-radius: 14px; background: rgba(5, 11, 18, 0.5); }
 .rejilla-estado dt { color: var(--suave); font-size: 0.72rem; }
 .rejilla-estado dd { margin: 6px 0 0; color: var(--texto); font-size: 0.92rem; font-weight: 700; overflow-wrap: anywhere; }
-.ajustes-ia, .vinculacion, .notificaciones { padding-top: 18px; border-top: 1px solid var(--linea); }
+.ajustes-ia, .gestion-dispositivos, .notificaciones { padding-top: 18px; border-top: 1px solid var(--linea); }
 .ajustes-ia h3, .notificaciones h3 { margin: 0 0 6px; }
 .ajustes-ia > p { min-height: 22px; margin: 0 0 14px; color: var(--suave); font-size: 0.84rem; }
 .formulario-ajustes { display: grid; gap: 12px; }
@@ -105,11 +105,24 @@ textarea:disabled { opacity: 0.55; }
 .boton-accion.secundario { border: 1px solid var(--linea); color: var(--texto); background: #102534; }
 .boton-accion:disabled { opacity: 0.4; }
 .boton-texto { min-height: 40px; border: 0; color: #fda4af; background: transparent; }
-.vinculacion > p { color: var(--suave); }
+.gestion-dispositivos h3 { margin: 0 0 12px; }
+.gestion-dispositivos h4 { margin: 22px 0 10px; color: var(--suave); }
+.vinculacion { margin-top: 14px; padding: 14px; border: 1px solid var(--linea); border-radius: 16px; background: #091a27; }
+.vinculacion > p { margin-top: 0; color: var(--suave); }
 .credencial-vinculacion { margin-top: 16px; padding: 16px; border: 1px solid var(--linea); border-radius: 16px; text-align: center; background: #ffffff; }
 .credencial-vinculacion img { display: block; width: min(100%, 320px); margin: 0 auto; }
 .credencial-vinculacion p { color: #365164; }
 .credencial-vinculacion output { display: block; color: #06131f; font-size: clamp(1.8rem, 9vw, 2.7rem); font-weight: 800; letter-spacing: 0.12em; }
+.lista-dispositivos { display: grid; gap: 10px; }
+.dispositivo-item { display: grid; gap: 10px; padding: 13px; border: 1px solid var(--linea); border-radius: 14px; background: #0a1b28; }
+.dispositivo-item.revocado { opacity: 0.7; border-style: dashed; }
+.dispositivo-item > div:first-child { display: grid; gap: 3px; }
+.dispositivo-item small { color: var(--suave); }
+.dispositivo-item select { width: 100%; min-height: 40px; padding: 7px 9px; border: 1px solid var(--linea); border-radius: 10px; color: var(--texto); background: #07131f; }
+.acciones-dispositivo { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.acciones-dispositivo button { min-height: 40px; border: 1px solid var(--linea); border-radius: 10px; color: var(--texto); background: #102534; font-weight: 700; }
+.acciones-dispositivo .boton-peligro { border-color: #713547; color: #fecdd3; background: #321622; }
+.acciones-dispositivo button:disabled { opacity: 0.45; }
 @media (min-width: 700px) { .cabecera { padding-inline: 28px; } .mensajes { padding-inline: 28px; } .pie { padding-inline: 24px; } }
 @media (max-width: 430px) {
   .cabecera { gap: 8px; padding-inline: 12px; }

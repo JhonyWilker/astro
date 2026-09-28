@@ -180,6 +180,7 @@ Objetivo: hablar con ASTRO diciendo solo "Astro", en conversación continua, con
 | 28 | ✅ Voz en streaming: empieza a hablar antes de terminar de pensar | Streaming funcional aceptado por Jhony con 4,17 s indicados; objetivo original <3 s pendiente para la fase 36 |
 | 28a | ✅ Seguridad, procedencia, cancelación y conversación compartida | Acceso autenticado, límites, contexto fiable, cancelación real y sesión independiente del socket |
 | 28b | ✅ Vinculación de dispositivos desde la PWA mediante QR o código de un solo uso | Un administrador añade un dispositivo sin terminal; el código caduca y no puede reutilizarse |
+| 28c | ✅ Roles y administración de dispositivos | Jhony puede asignar administrador, personal o restringido, cambiarlo y revocar el dispositivo sin exponer sus datos |
 | 29 | Wake word propio: entrenar el modelo para "Astro" | Se activa con "Astro", sin "hey" |
 | 30 | Estados: dormido, escuchando, pensando, ejecutando, hablando | Indicador visual y sonoro de cada estado |
 | 31 | Conversación continua: ventana de seguimiento sin repetir "Astro" | 5 intercambios seguidos sin nombrarlo |
@@ -427,7 +428,7 @@ Fase actual: **29 — Wake word propio: entrenar el modelo para «Astro».** Act
 | --- | --- | --- | --- |
 | 0 — Preparación | 1–10 | Primer script con el modelo | Completado |
 | 1 — Cerebro en texto y app web | 11–22g | Conversación con herramientas, también desde el iPhone | Completado |
-| 2 — Voz | 23–38 | ASTRO 0.1 por voz | En curso: 23–28b completadas; fase 29 pendiente |
+| 2 — Voz | 23–38 | ASTRO 0.1 por voz | En curso: 23–28c completadas; fase 29 pendiente |
 | 3 — Memoria | 39–52 | Recuerda durante semanas | Pendiente |
 | 4 — Herramientas personales | 53–66 | Email y calendario por voz | Pendiente |
 | 5 — Casa | 67–78 | Control de la casa | Pendiente |

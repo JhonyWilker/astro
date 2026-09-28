@@ -227,3 +227,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Un administrador puede emitir desde la PWA una vinculación de un solo uso, presentada como QR y código de ocho cifras. Caduca en cinco minutos; al reclamarla se crea un token aleatorio distinto y solo se guarda su huella SHA-256. Los dispositivos así añadidos pertenecen a Jhony, pero no son administradores.
 - Motivo: Facilitar el alta sin convertir el QR o el código breve en una credencial permanente y sin repartir privilegios innecesarios.
 - Consecuencia: Compartir el QR o código durante su vigencia permite vincular un dispositivo normal. La revocación individual y la gestión de permisos se añadirán en una fase posterior; mientras tanto permanece la vía de recuperación con clave larga.
+
+## 2026-09-29 · Identidad y poder separados por dispositivo
+
+- Contexto: Marcar un dispositivo como no administrador no impedía que compartiese la conversación de `jhony`.
+- Decisión: Definir administrador, personal y restringido. Los dos primeros usan la identidad de Jhony; el tercero recibe identidad, historial, personalidad y herramientas aislados. Un administrador puede cambiar o revocar otros dispositivos, nunca el que está usando. Esta decisión sustituye la regla provisional de 28b por la que toda vinculación creaba un dispositivo sin administración.
+- Motivo: Permitir distintos niveles de confianza sin convertir ASTRO en una plataforma multiusuario ni exponer información privada en equipos compartidos.
+- Consecuencia: Promover a personal o administrador concede acceso al contexto de Jhony; cambiar a restringido cierra la conexión existente y obliga a iniciar una sesión aislada. Las nuevas herramientas no estarán disponibles para restringidos salvo autorización explícita.

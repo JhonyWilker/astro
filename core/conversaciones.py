@@ -28,7 +28,7 @@ class Conversaciones:
     def __init__(self):
         self._usuarios = {}
 
-    def obtener(self, usuario, nucleo):
+    def obtener(self, usuario, nucleo, restringida=False):
         ahora = monotonic()
         for nombre, conversacion in list(self._usuarios.items()):
             if not conversacion.conexiones and not conversacion.bloqueo.locked() and ahora - conversacion.ultimo_uso > 86400:
@@ -36,5 +36,7 @@ class Conversaciones:
         if usuario not in self._usuarios:
             if len(self._usuarios) >= 64:
                 raise ValueError("Límite de conversaciones alcanzado")
-            self._usuarios[usuario] = Conversacion(nucleo.nueva_sesion())
+            self._usuarios[usuario] = Conversacion(
+                nucleo.nueva_sesion(restringida=restringida)
+            )
         return self._usuarios[usuario]
