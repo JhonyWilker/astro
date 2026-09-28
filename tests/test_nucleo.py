@@ -222,6 +222,10 @@ def test_bucle_agente_encadena_tres_herramientas(
         for registro in resultado.registros
     )
     assert len(api.llamadas) == 4
+    assert all(
+        llamada["reasoning"] == {"effort": "low"}
+        for llamada in api.llamadas
+    )
     assert "registros fiables generados por el núcleo" in (
         api.llamadas[-1]["instructions"]
     )

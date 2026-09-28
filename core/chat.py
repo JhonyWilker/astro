@@ -70,6 +70,7 @@ class Configuracion:
     idioma: str
     zona_horaria: str
     nivel_servicio: str
+    esfuerzo_razonamiento: str
     timeout_segundos: float
     reintentos: int
     pasos_herramienta_maximos: int
@@ -216,6 +217,7 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     idioma = datos.get("idioma")
     zona_horaria = datos.get("zona_horaria")
     nivel_servicio = datos.get("nivel_servicio")
+    esfuerzo_razonamiento = datos.get("razonamiento")
     tokens = limites.get("tokens_salida_maximos")
     turnos = limites.get("turnos_historial_maximos")
     timeout_segundos = api.get("timeout_segundos")
@@ -239,6 +241,16 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     if nivel_servicio != "default":
         raise ValueError(
             "'nivel_servicio' debe ser 'default' para usar las tarifas configuradas"
+        )
+    if esfuerzo_razonamiento not in {
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+    }:
+        raise ValueError(
+            "'razonamiento' debe ser low, medium, high, xhigh o max"
         )
 
     zona_horaria = zona_horaria.strip()
@@ -310,6 +322,7 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
         idioma=idioma.strip(),
         zona_horaria=zona_horaria,
         nivel_servicio=nivel_servicio,
+        esfuerzo_razonamiento=esfuerzo_razonamiento,
         timeout_segundos=float(timeout_segundos),
         reintentos=reintentos,
         pasos_herramienta_maximos=pasos_herramienta_maximos,
@@ -456,6 +469,9 @@ def ejecutar_stream(
             input=entrada,
             max_output_tokens=configuracion.tokens_salida_maximos,
             service_tier=configuracion.nivel_servicio,
+            reasoning={
+                "effort": configuracion.esfuerzo_razonamiento,
+            },
             tools=registro.definiciones_api(),
             parallel_tool_calls=False,
             stream=True,

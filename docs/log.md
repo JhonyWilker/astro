@@ -245,3 +245,10 @@ Formato:
 - Falló: La prueba de pausa inicial no permitió distinguir si Jhony había terminado antes de que comenzase la transcripción, por lo que el silencio final predeterminado se aumentó de 0,8 a 1 segundo y se repitió con medición del WAV. En esa repetición la detección funcionó, pero Whisper transcribió mal la frase; el análisis de niveles confirmó que el audio contenía todos los tramos y que el problema no era un corte del detector.
 - Decidido: La primera detección de voz será local y basada en energía, sin añadir dependencias. Usará bloques de 30 ms, pregrabación de 0,3 segundos, activación por mayoría y 1 segundo de silencio final. Los límites serán configurables y el cliente continuará abierto cuando no detecte ninguna frase.
 - Siguiente: fase 28 — voz en streaming para comenzar a hablar antes de terminar de pensar.
+
+## 2026-09-28 · Fase 28 — Voz en streaming
+
+- Hecho: Síntesis y reproducción por fragmentos, con medición de latencia. Prueba real: seis fragmentos; transcripción 0,56 s, primer texto 3,65 s y primera voz indicada 4,17 s. Configuración `razonamiento: low` desplegada; VPS saludable. 61 pruebas superadas.
+- Falló: No se alcanzó el objetivo inicial de menos de tres segundos. Hubo capturas sin voz y problemas de acceso SSH, resueltos para el despliegue.
+- Decidido: Jhony acepta el funcionamiento actual y cierra esta fase con la latencia pendiente de optimización en la fase 36. La cifra de 4,17 s mide desde el final de la captura hasta antes de llamar al reproductor; no incluye el silencio final del detector ni mide acústicamente la primera palabra.
+- Siguiente: fase 29 — activación con «Astro».

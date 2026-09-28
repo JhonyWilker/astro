@@ -185,3 +185,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Detectar voz localmente mediante RMS adaptado al ruido previo, bloques PCM16 de 30 ms y una ventana de activación. Conservar 0,3 segundos anteriores al inicio y cerrar después de 1 segundo continuo de silencio, con límites configurables de espera y duración.
 - Motivo: El audio ya está disponible como PCM16 y puede analizarse sin otra dependencia, sin enviar grabaciones privadas y sin imponer una duración fija.
 - Consecuencia: Las frases cortas terminan pronto y las pausas naturales inferiores a un segundo se conservan. Los entornos ruidosos necesitarán pruebas más amplias en la fase 38 y podrán motivar un detector neuronal si la medición demuestra que hace falta.
+
+## 2026-09-28 · Streaming de voz y aceptación provisional de latencia
+
+- Contexto: La voz se sintetiza y reproduce por fragmentos mientras llega la respuesta. La prueba real mostró seis fragmentos y 4,17 s indicados hasta la primera voz, frente a 4,34 s en la prueba anterior.
+- Decisión: Jhony acepta cerrar la fase 28 con este funcionamiento y aplazar la optimización a la fase 36. Se conserva el modelo elegido y se configura `razonamiento: low`.
+- Motivo: Jhony considera suficiente la respuesta actual y prefiere perfeccionarla más adelante.
+- Consecuencia: El objetivo original de menos de tres segundos no se declara superado. Los 4,17 s se cuentan desde el final de la captura hasta antes de llamar al reproductor, excluyendo el silencio final del detector y la latencia del dispositivo. La fase 36 deberá medir desde el final real del habla hasta el inicio audible, además de desglosar transcripción, modelo y síntesis.

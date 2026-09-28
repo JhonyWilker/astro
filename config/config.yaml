@@ -3,6 +3,7 @@ modelo: gpt-6-astra
 idioma: español de España
 zona_horaria: Europe/Madrid
 nivel_servicio: default
+razonamiento: low
 
 proveedores:
   openai:

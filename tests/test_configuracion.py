@@ -14,6 +14,7 @@ def test_cargar_configuracion_real() -> None:
     assert configuracion.modelo == "gpt-6-astra"
     assert configuracion.zona_horaria == "Europe/Madrid"
     assert configuracion.pasos_herramienta_maximos == 5
+    assert configuracion.esfuerzo_razonamiento == "low"
 
 
 def test_configuracion_rechaza_limite_agente_invalido(tmp_path) -> None:
@@ -30,6 +31,20 @@ def test_configuracion_rechaza_limite_agente_invalido(tmp_path) -> None:
         ValueError,
         match="pasos_herramienta_maximos",
     ):
+        cargar_configuracion(ruta)
+
+
+def test_configuracion_rechaza_razonamiento_invalido(tmp_path) -> None:
+    datos = yaml.safe_load(RUTA_CONFIG.read_text(encoding="utf-8"))
+    datos = deepcopy(datos)
+    datos["razonamiento"] = "ninguno"
+    ruta = tmp_path / "config.yaml"
+    ruta.write_text(
+        yaml.safe_dump(datos, allow_unicode=True),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="razonamiento"):
         cargar_configuracion(ruta)
 
 

@@ -101,3 +101,9 @@ Pulsa Enter, habla y espera la respuesta. El cliente conserva unos instantes ant
 La espera inicial máxima es de 5 segundos y una intervención puede durar hasta 30 segundos. Se pueden ajustar con `--espera-maxima`, `--duracion-maxima` y `--silencio-final`. Los límites evitan que el micrófono quede abierto indefinidamente.
 
 Los números de los dispositivos pueden cambiar. Usa `python -m clients.grabar_audio --listar` para revisar micrófonos y las herramientas de `sounddevice` para revisar salidas. La detección usa el nivel de la señal y se adapta al ruido observado antes de que comience la voz.
+
+## Respuesta de voz en streaming
+
+ASTRO no espera a recibir todo el texto. El primer fragmento se sintetiza en cuanto termina una frase o se acumulan unos 45 caracteres; mientras ese audio se reproduce, el siguiente se prepara. La terminal muestra el tiempo desde que termina la captura hasta antes de llamar al reproductor y el número de fragmentos hablados. Esta aproximación excluye el silencio final del detector y la latencia del dispositivo; no es una medición acústica de la primera palabra.
+
+Los WAV parciales se guardan en `data/audio` y continúan excluidos de Git. El orden de la respuesta se conserva aunque síntesis y reproducción trabajen simultáneamente.
