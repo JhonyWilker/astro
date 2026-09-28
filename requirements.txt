@@ -7,3 +7,4 @@ fastapi==0.141.1
 uvicorn[standard]==0.54.0
 websockets==17.1
 pywebpush==2.3.0
+segno==1.6.6

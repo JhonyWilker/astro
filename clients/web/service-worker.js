@@ -1,9 +1,9 @@
-const CACHE_NAME = "astro-shell-v8";
+const CACHE_NAME = "astro-shell-v9";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
-  "/static/app.css?v=8",
-  "/static/app.js?v=8",
+  "/static/app.css?v=9",
+  "/static/app.js?v=9",
   "/static/icon.svg"
 ];
 

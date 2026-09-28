@@ -179,6 +179,7 @@ Objetivo: hablar con ASTRO diciendo solo "Astro", en conversación continua, con
 | 27 | ✅ Detección de voz: saber cuándo terminas de hablar | Sin cortar ni esperar de más |
 | 28 | ✅ Voz en streaming: empieza a hablar antes de terminar de pensar | Streaming funcional aceptado por Jhony con 4,17 s indicados; objetivo original <3 s pendiente para la fase 36 |
 | 28a | ✅ Seguridad, procedencia, cancelación y conversación compartida | Acceso autenticado, límites, contexto fiable, cancelación real y sesión independiente del socket |
+| 28b | ✅ Vinculación de dispositivos desde la PWA mediante QR o código de un solo uso | Un administrador añade un dispositivo sin terminal; el código caduca y no puede reutilizarse |
 | 29 | Wake word propio: entrenar el modelo para "Astro" | Se activa con "Astro", sin "hey" |
 | 30 | Estados: dormido, escuchando, pensando, ejecutando, hablando | Indicador visual y sonoro de cada estado |
 | 31 | Conversación continua: ventana de seguimiento sin repetir "Astro" | 5 intercambios seguidos sin nombrarlo |
@@ -420,13 +421,13 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **29 — Wake word propio: entrenar el modelo para "Astro" (pendiente de iniciar).** Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **29 — Wake word propio: entrenar el modelo para «Astro».** Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |
 | 0 — Preparación | 1–10 | Primer script con el modelo | Completado |
 | 1 — Cerebro en texto y app web | 11–22g | Conversación con herramientas, también desde el iPhone | Completado |
-| 2 — Voz | 23–38 | ASTRO 0.1 por voz | En curso: 23–28a completadas; latencia de la 28 aceptada provisionalmente |
+| 2 — Voz | 23–38 | ASTRO 0.1 por voz | En curso: 23–28b completadas; fase 29 pendiente |
 | 3 — Memoria | 39–52 | Recuerda durante semanas | Pendiente |
 | 4 — Herramientas personales | 53–66 | Email y calendario por voz | Pendiente |
 | 5 — Casa | 67–78 | Control de la casa | Pendiente |

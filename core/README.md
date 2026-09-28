@@ -85,11 +85,15 @@ El número máximo de ejecuciones se define en `agente.pasos_herramienta_maximos
 - `POST /push/unsubscribe`: elimina una suscripción.
 - `POST /push/test`: envía un aviso de prueba a los dispositivos registrados.
 - `POST /auth/login`: vincula una clave de dispositivo y crea una cookie segura.
+- `POST /auth/pairings`: crea una vinculación temporal mediante QR y código; solo para administradores.
+- `POST /auth/pair/claim`: reclama una vinculación temporal y crea la cookie segura del dispositivo.
 - `POST /auth/logout`: elimina la cookie de acceso del navegador.
 - `GET /`: aplicación web instalable.
 - `WS /ws`: conversación en streaming.
 
 La carcasa estática y `/health` son públicos dentro de la red privada. Las demás rutas y el WebSocket exigen una credencial declarada en `.env.acceso`. El servidor valida el origen web, limita cuerpos y tramas a 16 KiB, aplica límites de frecuencia y reserva los ajustes de IA y la prueba Push a dispositivos administradores. El navegador entrega una vez su clave a `/auth/login` y recibe una cookie `Secure`, `HttpOnly` y `SameSite=Strict`; los clientes Python usan `Bearer`.
+
+Como alternativa, un administrador puede abrir «Añadir dispositivo» en el panel Estado y generar un QR y un código de ocho cifras. Ambos representan la misma vinculación, caducan a los cinco minutos, solo pueden usarse una vez y crean un dispositivo sin privilegios administrativos. El QR transporta el código en el fragmento de la URL, que no se envía al servidor durante la navegación. El registro persistente conserva el nombre, el usuario y la huella SHA-256 del token definitivo, no el token original.
 
 El protocolo 2 envía `ready` al conectar, uno o más `delta`, `provider_change` cuando cambia la ruta y `done` al terminar. El cliente confirma contenido con `ack` y `played`; puede enviar `cancel` y recibe `cancelled`. `busy` evita dos turnos simultáneos y `sync` actualiza otros dispositivos. Una edición entra como `edit`; si termina, el servidor envía `rewind` antes de la respuesta corregida. Los fallos se envían como `error`.
 

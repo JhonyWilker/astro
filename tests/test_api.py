@@ -163,6 +163,10 @@ def test_panel_de_estado() -> None:
     assert respuesta.json()["provider"] == "Proveedor prueba"
     assert respuesta.json()["model"] == "modelo-prueba"
     assert respuesta.json()["push"]["configured"] is True
+    assert respuesta.json()["device"] == {
+        "name": "prueba",
+        "administrator": True,
+    }
 
 
 def test_ajustes_ia_exigen_token_y_se_actualizan() -> None:
@@ -226,8 +230,8 @@ def test_pagina_web() -> None:
     assert respuesta.status_code == 200
     assert "<title>ASTRO</title>" in respuesta.text
     assert 'rel="manifest"' in respuesta.text
-    assert 'src="/static/app.js?v=8"' in respuesta.text
-    assert 'href="/static/app.css?v=8"' in respuesta.text
+    assert 'src="/static/app.js?v=9"' in respuesta.text
+    assert 'href="/static/app.css?v=9"' in respuesta.text
 
 
 def test_manifiesto_pwa() -> None:
@@ -251,6 +255,8 @@ def test_recursos_pwa() -> None:
     assert "new WebSocket" in javascript.text
     assert 'type: "edit"' in javascript.text
     assert 'evento.type === "rewind"' in javascript.text
+    assert '"/auth/pairings"' in javascript.text
+    assert '"/auth/pair/claim"' in javascript.text
     assert "serviceWorker.register" in javascript.text
     assert 'addEventListener("push"' in service_worker.text
     assert "showNotification" in service_worker.text

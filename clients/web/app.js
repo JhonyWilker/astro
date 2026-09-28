@@ -17,7 +17,9 @@ const estadoProveedor = document.querySelector("#estado-proveedor");
 const estadoModelo = document.querySelector("#estado-modelo");
 const estadoTiempo = document.querySelector("#estado-tiempo");
 const estadoConexiones = document.querySelector("#estado-conexiones");
+const estadoDispositivo = document.querySelector("#estado-dispositivo");
 const estadoEnrutador = document.querySelector("#estado-enrutador");
+const ajustesIA = document.querySelector(".ajustes-ia");
 const formularioIA = document.querySelector("#formulario-ia");
 const iaPrincipal = document.querySelector("#ia-principal");
 const iaModeloPrincipal = document.querySelector("#ia-modelo-principal");
@@ -31,6 +33,15 @@ const estadoNotificaciones = document.querySelector("#estado-notificaciones");
 const activarPush = document.querySelector("#activar-push");
 const probarPush = document.querySelector("#probar-push");
 const desactivarPush = document.querySelector("#desactivar-push");
+const vinculacion = document.querySelector("#vinculacion");
+const formularioVinculacion = document.querySelector("#formulario-vinculacion");
+const nombreVinculacion = document.querySelector("#nombre-vinculacion");
+const crearVinculacion = document.querySelector("#crear-vinculacion");
+const resultadoVinculacion = document.querySelector("#resultado-vinculacion");
+const credencialVinculacion = document.querySelector("#credencial-vinculacion");
+const qrVinculacion = document.querySelector("#qr-vinculacion");
+const codigoVinculacion = document.querySelector("#codigo-vinculacion");
+const caducidadVinculacion = document.querySelector("#caducidad-vinculacion");
 let socket = null;
 let respuestaActual = null;
 let respondiendo = false;
@@ -50,6 +61,7 @@ let editorAbierto = null;
 let accesoNecesario = false;
 let caracteresRecibidos = 0;
 let ultimaConfirmacion = 0;
+let esAdministrador = false;
 const detener = document.querySelector("#detener");
 detener.addEventListener("click", () => {
   if (socket?.readyState === WebSocket.OPEN) {
@@ -81,15 +93,50 @@ accesoFormulario.addEventListener("submit", async (evento) => {
   evento.preventDefault();
   const campo = document.querySelector("#clave-acceso");
   try {
-    await pedirJSON("/auth/login", {
-      method: "POST", headers: { Authorization: `Bearer ${campo.value.trim()}` },
-    });
+    const valor = campo.value.trim();
+    const codigo = valor.replace(/\D/g, "");
+    if (codigo.length === 8) {
+      await reclamarCodigo(codigo);
+    } else {
+      await pedirJSON("/auth/login", {
+        method: "POST", headers: { Authorization: `Bearer ${valor}` },
+      });
+    }
     campo.value = ""; accesoNecesario = false;
     window.location.reload();
   } catch {
     document.querySelector("#error-acceso").textContent = "No se pudo vincular el dispositivo. Comprueba la clave.";
   }
 });
+
+async function reclamarCodigo(codigo) {
+  return pedirJSON("/auth/pair/claim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ codigo }),
+  });
+}
+
+async function procesarVinculacionURL() {
+  const parametros = new URLSearchParams(location.hash.slice(1));
+  const codigo = parametros.get("vincular");
+  if (!codigo) return false;
+  history.replaceState(null, "", `${location.pathname}${location.search}`);
+  const estadoActual = await fetch("/status");
+  if (estadoActual.ok) {
+    agregarSistema("Este dispositivo ya está vinculado. Abre el QR en el dispositivo nuevo.");
+    return false;
+  }
+  try {
+    await reclamarCodigo(codigo);
+    window.location.reload();
+    return true;
+  } catch (error) {
+    solicitarAcceso();
+    document.querySelector("#error-acceso").textContent = error.message;
+    return true;
+  }
+}
 
 function mostrarEstado(tipo, texto) { estado.className = `estado ${tipo}`; estadoTexto.textContent = texto; }
 function desplazar() { mensajes.scrollTo({ top: mensajes.scrollHeight, behavior: "smooth" }); }
@@ -200,13 +247,17 @@ async function actualizarPanel() {
     estadoModelo.textContent = datos.model;
     estadoTiempo.textContent = formatearTiempo(datos.uptime_seconds);
     estadoConexiones.textContent = String(datos.websocket_connections);
+    estadoDispositivo.textContent = datos.device.name;
+    esAdministrador = Boolean(datos.device.administrator);
+    ajustesIA.hidden = !esAdministrador;
+    vinculacion.hidden = !esAdministrador;
     estadoEnrutador.textContent = datos.ai.degraded
       ? `Modo respaldo. Se volverá a probar el principal en ${datos.ai.retry_in_seconds} s.`
       : "Proveedor principal activo.";
   } catch {
     estadoNucleo.textContent = "No disponible";
   }
-  await cargarAjustesIA();
+  if (esAdministrador) await cargarAjustesIA();
   await actualizarEstadoPush();
 }
 function llenarProveedor(select, proveedores, elegido) {
@@ -247,7 +298,8 @@ async function actualizarEstadoPush() {
   if (suscripcion && permiso === "granted") {
     estadoNotificaciones.textContent = "Activadas en este dispositivo.";
     activarPush.hidden = true;
-    probarPush.disabled = false;
+    probarPush.hidden = !esAdministrador;
+    probarPush.disabled = !esAdministrador;
     desactivarPush.hidden = false;
   } else {
     estadoNotificaciones.textContent = permiso === "denied"
@@ -256,6 +308,7 @@ async function actualizarEstadoPush() {
     activarPush.hidden = false;
     activarPush.disabled = permiso === "denied" || !clavePublicaPush;
     probarPush.disabled = true;
+    probarPush.hidden = !esAdministrador;
     desactivarPush.hidden = true;
   }
 }
@@ -401,6 +454,28 @@ formularioIA.addEventListener("submit", async (evento) => {
   } catch (error) { resultadoIA.textContent = error.message; }
   finally { guardarIA.disabled = false; }
 });
+formularioVinculacion.addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  crearVinculacion.disabled = true;
+  resultadoVinculacion.textContent = "Creando acceso temporal…";
+  credencialVinculacion.hidden = true;
+  try {
+    const datos = await pedirJSON("/auth/pairings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombre: nombreVinculacion.value.trim() }),
+    });
+    qrVinculacion.src = datos.qr_data_uri;
+    codigoVinculacion.textContent = datos.code;
+    caducidadVinculacion.textContent = "Válido durante cinco minutos y una sola vez.";
+    resultadoVinculacion.textContent = "Escanea o escribe el código en el dispositivo nuevo.";
+    credencialVinculacion.hidden = false;
+  } catch (error) {
+    resultadoVinculacion.textContent = error.message;
+  } finally {
+    crearVinculacion.disabled = false;
+  }
+});
 activarPush.addEventListener("click", async () => {
   try {
     const permiso = await Notification.requestPermission();
@@ -445,10 +520,14 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) cone
 if (window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone) instalar.hidden = true;
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/service-worker.js?v=8").catch(() => agregarSistema("La instalación sin conexión no está disponible."));
+    navigator.serviceWorker.register("/service-worker.js?v=9").catch(() => agregarSistema("La instalación sin conexión no está disponible."));
   });
 }
-pedirJSON("/push/public-key")
-  .then((datos) => { clavePublicaPush = datos.public_key; })
-  .catch(() => { clavePublicaPush = null; });
-conectar();
+async function iniciarAplicacion() {
+  if (await procesarVinculacionURL()) return;
+  pedirJSON("/push/public-key")
+    .then((datos) => { clavePublicaPush = datos.public_key; })
+    .catch(() => { clavePublicaPush = null; });
+  conectar();
+}
+iniciarAplicacion();

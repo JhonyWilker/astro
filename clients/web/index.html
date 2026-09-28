@@ -13,8 +13,8 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/icon.svg">
-  <link rel="stylesheet" href="/static/app.css?v=8">
-  <script src="/static/app.js?v=8" defer></script>
+  <link rel="stylesheet" href="/static/app.css?v=9">
+  <script src="/static/app.js?v=9" defer></script>
 </head>
 <body>
   <div class="app">
@@ -22,8 +22,9 @@
       <form id="acceso-formulario" class="tarjeta-modal">
         <p class="sobrelinea">Acceso privado</p>
         <h2>Vincular dispositivo</h2>
-        <label>Clave de acceso a ASTRO<input id="clave-acceso" type="password" autocomplete="off" required maxlength="512"></label>
+        <label>Código de vinculación<input id="clave-acceso" type="password" inputmode="numeric" autocomplete="one-time-code" required maxlength="512" placeholder="1234 5678"></label>
         <button class="boton-accion" type="submit">Entrar</button>
+        <p>Genera el código desde «Estado → Añadir dispositivo». También se admite una clave de recuperación.</p>
         <p id="error-acceso" role="status"></p>
       </form>
     </div>
@@ -81,6 +82,7 @@
         <div><dt>Modelo</dt><dd id="estado-modelo">—</dd></div>
         <div><dt>Tiempo activo</dt><dd id="estado-tiempo">—</dd></div>
         <div><dt>Conexiones</dt><dd id="estado-conexiones">—</dd></div>
+        <div><dt>Dispositivo</dt><dd id="estado-dispositivo">—</dd></div>
       </dl>
       <section class="ajustes-ia">
         <h3>Motor de IA</h3>
@@ -95,6 +97,21 @@
           <button id="guardar-ia" class="boton-accion" type="submit">Guardar configuración</button>
           <p id="resultado-ia" role="status"></p>
         </form>
+      </section>
+      <section id="vinculacion" class="vinculacion" hidden>
+        <h3>Añadir dispositivo</h3>
+        <p>Crea un acceso de un solo uso. Caduca en cinco minutos.</p>
+        <form id="formulario-vinculacion" class="formulario-ajustes">
+          <label>Nombre del dispositivo<input id="nombre-vinculacion" maxlength="60" autocomplete="off" placeholder="Tablet del restaurante" required></label>
+          <button id="crear-vinculacion" class="boton-accion" type="submit">Crear QR y código</button>
+          <p id="resultado-vinculacion" role="status"></p>
+        </form>
+        <div id="credencial-vinculacion" class="credencial-vinculacion" hidden>
+          <img id="qr-vinculacion" alt="Código QR para vincular el dispositivo">
+          <p>O escribe este código en el dispositivo nuevo:</p>
+          <output id="codigo-vinculacion"></output>
+          <p id="caducidad-vinculacion"></p>
+        </div>
       </section>
       <section class="notificaciones">
         <h3>Notificaciones</h3>

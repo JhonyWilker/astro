@@ -1,5 +1,7 @@
 import asyncio
+import base64
 from contextlib import asynccontextmanager
+from io import BytesIO
 from pathlib import Path
 from secrets import compare_digest, token_urlsafe
 from time import monotonic
@@ -16,6 +18,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+import segno
 
 from core.ajustes_ia import AjustesIA
 from core.acceso import Acceso, MiddlewareAcceso
@@ -57,6 +60,14 @@ class SuscripcionPushEntrada(BaseModel):
 
 class EndpointPush(BaseModel):
     endpoint: str = Field(min_length=1, max_length=2048)
+
+
+class NuevaVinculacion(BaseModel):
+    nombre: str = Field(min_length=1, max_length=60)
+
+
+class ReclamarVinculacion(BaseModel):
+    codigo: str = Field(min_length=8, max_length=12)
 
 
 class AjustesIAEntrada(BaseModel):
@@ -132,14 +143,69 @@ def crear_app(
     conversaciones = Conversaciones()
     aplicacion.add_middleware(MiddlewareAcceso, acceso=acceso)
 
-    @aplicacion.post("/auth/login")
-    async def login(request: Request):
-        respuesta = JSONResponse({"authenticated": True})
+    def respuesta_con_cookie(dispositivo, datos):
+        respuesta = JSONResponse(datos)
         respuesta.set_cookie(
-            "astro_acceso", request.state.dispositivo.token,
+            "astro_acceso", dispositivo.token,
             secure=True, httponly=True, samesite="strict", max_age=2592000,
         )
         return respuesta
+
+    @aplicacion.post("/auth/login")
+    async def login(request: Request):
+        return respuesta_con_cookie(
+            request.state.dispositivo,
+            {"authenticated": True, "device": request.state.dispositivo.nombre},
+        )
+
+    @aplicacion.post("/auth/pairings")
+    async def crear_vinculacion(entrada: NuevaVinculacion, request: Request):
+        try:
+            codigo, caduca_en = acceso.crear_vinculacion(
+                entrada.nombre,
+                request.state.dispositivo.usuario,
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        origen = request.headers.get("origin")
+        if origen not in acceso.origenes:
+            origen = sorted(acceso.origenes)[0]
+        compacto = codigo.replace(" ", "")
+        url = f"{origen}/#vincular={compacto}"
+        salida = BytesIO()
+        segno.make(url, error="h").save(
+            salida,
+            kind="svg",
+            scale=6,
+            border=3,
+            dark="#06131f",
+            light="#ffffff",
+            xmldecl=False,
+        )
+        qr = base64.b64encode(salida.getvalue()).decode()
+        return {
+            "code": codigo,
+            "expires_in_seconds": caduca_en,
+            "pairing_url": url,
+            "qr_data_uri": f"data:image/svg+xml;base64,{qr}",
+        }
+
+    @aplicacion.post("/auth/pair/claim")
+    async def reclamar_vinculacion(entrada: ReclamarVinculacion, request: Request):
+        identidad = request.client.host if request.client else "desconocida"
+        try:
+            dispositivo = acceso.reclamar_vinculacion(
+                entrada.codigo,
+                identidad,
+            )
+        except PermissionError as error:
+            raise HTTPException(status_code=429, detail=str(error)) from error
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+        return respuesta_con_cookie(
+            dispositivo,
+            {"authenticated": True, "device": dispositivo.nombre},
+        )
 
     @aplicacion.post("/auth/logout")
     async def logout():
@@ -152,7 +218,7 @@ def crear_app(
         return {"status": "ok", "service": "astro-core"}
 
     @aplicacion.get("/status")
-    async def status() -> dict:
+    async def status(request: Request) -> dict:
         servicio = aplicacion.state.notificaciones
         try:
             suscripciones = servicio.contar()
@@ -181,6 +247,10 @@ def crear_app(
             "ai": estado_ia,
             "uptime_seconds": int(monotonic() - aplicacion.state.inicio),
             "websocket_connections": aplicacion.state.conexiones,
+            "device": {
+                "name": request.state.dispositivo.nombre,
+                "administrator": request.state.dispositivo.administrador,
+            },
             "push": {
                 "configured": servicio.configurado,
                 "subscriptions": suscripciones,

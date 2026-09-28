@@ -220,3 +220,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Mantener la configuración actual y registrar `google/gemini-3.8-flash` como candidato. La prueba sintética real mediante Responses API usó `calcular`, incorporó su resultado y respondió correctamente; no se modificó el proveedor activo ni el modelo de respaldo.
 - Motivo: Comprobar compatibilidad técnica antes de decidir si las conversaciones pueden enviarse a otra empresa.
 - Consecuencia: ASTRO continúa con OpenAI como principal y OpenRouter con el modelo actual como respaldo. Activar Gemini requerirá una decisión posterior de Jhony y aceptar que Google procese los mensajes enviados durante el respaldo.
+
+## 2026-09-29 · Vinculación temporal con privilegio mínimo
+
+- Contexto: Copiar una clave larga en cada navegador es incómodo y aumenta el riesgo de errores o exposición.
+- Decisión: Un administrador puede emitir desde la PWA una vinculación de un solo uso, presentada como QR y código de ocho cifras. Caduca en cinco minutos; al reclamarla se crea un token aleatorio distinto y solo se guarda su huella SHA-256. Los dispositivos así añadidos pertenecen a Jhony, pero no son administradores.
+- Motivo: Facilitar el alta sin convertir el QR o el código breve en una credencial permanente y sin repartir privilegios innecesarios.
+- Consecuencia: Compartir el QR o código durante su vigencia permite vincular un dispositivo normal. La revocación individual y la gestión de permisos se añadirán en una fase posterior; mientras tanto permanece la vía de recuperación con clave larga.

@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 from types import SimpleNamespace
 
@@ -70,6 +71,81 @@ def test_configuracion_rechaza_tokens_duplicados(monkeypatch):
     )
     with pytest.raises(ValueError, match="no pueden repetirse"):
         Acceso.desde_entorno()
+
+
+def test_vinculacion_por_codigo_es_unica_persistente_y_sin_token(tmp_path):
+    ruta = tmp_path / "dispositivos.json"
+    acceso = Acceso(
+        [Dispositivo("administrador", "jhony", TOKEN, True)],
+        [ORIGEN],
+        ruta,
+    )
+    app = crear_app(NucleoFalso(), NotificacionesFalsas(), acceso)
+    with TestClient(
+        app,
+        base_url=ORIGEN,
+        headers={"Authorization": f"Bearer {TOKEN}", "Origin": ORIGEN},
+    ) as administrador:
+        creada = administrador.post(
+            "/auth/pairings",
+            json={"nombre": "Tablet nueva"},
+        )
+    assert creada.status_code == 200
+    datos = creada.json()
+    assert len(datos["code"].replace(" ", "")) == 8
+    assert datos["expires_in_seconds"] == 300
+    assert datos["qr_data_uri"].startswith("data:image/svg+xml;base64,")
+    svg = base64.b64decode(datos["qr_data_uri"].split(",", 1)[1]).decode()
+    assert svg.startswith("<svg")
+    assert datos["pairing_url"].startswith(f"{ORIGEN}/#vincular=")
+    assert "?" not in datos["pairing_url"]
+
+    with TestClient(
+        app,
+        base_url=ORIGEN,
+        headers={"Origin": ORIGEN},
+    ) as nuevo:
+        reclamada = nuevo.post(
+            "/auth/pair/claim",
+            json={"codigo": datos["code"]},
+        )
+        assert reclamada.status_code == 200
+        token_nuevo = nuevo.cookies.get("astro_acceso")
+        estado = nuevo.get("/status")
+        repetida = nuevo.post(
+            "/auth/pair/claim",
+            json={"codigo": datos["code"]},
+        )
+
+    assert estado.status_code == 200
+    assert estado.json()["device"] == {
+        "name": "Tablet nueva",
+        "administrator": False,
+    }
+    assert repetida.status_code == 400
+    assert token_nuevo not in ruta.read_text(encoding="utf-8")
+    reiniciado = Acceso(
+        [Dispositivo("administrador", "jhony", TOKEN, True)],
+        [ORIGEN],
+        ruta,
+    )
+    recuperado = reiniciado.identificar(token_nuevo)
+    assert recuperado.nombre == "Tablet nueva"
+    assert not recuperado.administrador
+
+
+def test_dispositivo_normal_no_puede_crear_vinculaciones():
+    app = app_prueba(False)
+    with TestClient(
+        app,
+        base_url=ORIGEN,
+        headers={"Authorization": f"Bearer {TOKEN}", "Origin": ORIGEN},
+    ) as cliente:
+        respuesta = cliente.post(
+            "/auth/pairings",
+            json={"nombre": "No permitido"},
+        )
+    assert respuesta.status_code == 403
 
 
 def test_ws_limite_de_frame():

@@ -11,6 +11,7 @@ services:
       - .env.acceso
     environment:
       ASTRO_PUSH_DATA_PATH: /app/data/push_subscriptions.json
+      ASTRO_PAIRED_DEVICES_PATH: /app/data/dispositivos-vinculados.json
       ASTRO_VAPID_PRIVATE_KEY_PATH: /run/secrets/vapid_private_key
     ports:
       - "127.0.0.1:8000:8000"
