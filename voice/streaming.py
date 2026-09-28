@@ -86,6 +86,8 @@ async def reproducir_cola_streaming(
     sintetizador: Callable[..., Any] = sintetizar,
     reproductor: Callable[..., bool] = reproducir_wav,
     reloj: Callable[[], float] = perf_counter,
+    detener: Any | None = None,
+    confirmar: Any | None = None,
 ) -> ResultadoStreaming:
     cola_audio: asyncio.Queue[Path | None] = asyncio.Queue()
 
@@ -96,6 +98,11 @@ async def reproducir_cola_streaming(
                 texto = await cola_texto.get()
                 if texto is None:
                     return
+                confirmado = None
+                if isinstance(texto, tuple):
+                    texto, confirmado = texto
+                if detener is not None and detener.is_set():
+                    continue
                 indice += 1
                 ruta = ruta_base.with_name(
                     f"{ruta_base.stem}-{indice:03d}{ruta_base.suffix}"
@@ -107,7 +114,7 @@ async def reproducir_cola_streaming(
                     configuracion_voz,
                     ruta,
                 )
-                await cola_audio.put(ruta)
+                await cola_audio.put((ruta, confirmado))
         finally:
             await cola_audio.put(None)
 
@@ -117,20 +124,26 @@ async def reproducir_cola_streaming(
         latencia: float | None = None
 
         while True:
-            ruta = await cola_audio.get()
-            if ruta is None:
+            item = await cola_audio.get()
+            if item is None:
                 break
+            ruta, confirmado = item
+            if detener is not None and detener.is_set():
+                continue
             if latencia is None:
                 latencia = reloj() - inicio
-            desbordado = await asyncio.to_thread(
-                reproductor,
-                ruta,
-                dispositivo,
-            )
+            opciones = {"detener": detener} if detener is not None else {}
+            desbordado = await asyncio.to_thread(reproductor, ruta, dispositivo, **opciones)
+            if detener is not None and detener.is_set():
+                continue
+            if confirmar is not None and confirmado is not None:
+                await confirmar(confirmado)
             fragmentos += 1
             cortes += int(desbordado)
 
         if latencia is None:
+            if detener is not None and detener.is_set():
+                return ResultadoStreaming(0, 0.0, 0)
             raise RuntimeError("No se generó audio para la respuesta")
         return ResultadoStreaming(
             fragmentos=fragmentos,

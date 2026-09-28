@@ -130,6 +130,7 @@ def reproducir_wav(
     ruta: Path,
     dispositivo: int | None = None,
     modulo_audio: Any | None = None,
+    detener: Any | None = None,
 ) -> bool:
     with wave.open(str(ruta), "rb") as archivo:
         if archivo.getsampwidth() != 2:
@@ -145,7 +146,16 @@ def reproducir_wav(
         channels=canales,
         dtype="int16",
     ) as flujo:
-        desbordado = flujo.write(datos)
+        if detener is None:
+            desbordado = flujo.write(datos)
+        else:
+            desbordado = False
+            tamano = max(2 * canales, int(frecuencia_hz * 0.02) * 2 * canales)
+            for inicio in range(0, len(datos), tamano):
+                if detener.is_set():
+                    flujo.abort()
+                    break
+                desbordado |= flujo.write(datos[inicio:inicio + tamano])
     return bool(desbordado)
 
 

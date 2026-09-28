@@ -1,8 +1,21 @@
 from types import SimpleNamespace
 
-from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient as ClientePruebas
 
-from core.api import crear_app
+from core.api import crear_app as crear_app_real
+from core.acceso import Acceso, Dispositivo
+
+
+TOKEN_PRUEBA = "credencial-ficticia-exclusiva-de-pruebas"
+
+
+def crear_app(*args, **kwargs):
+    kwargs["acceso"] = Acceso([Dispositivo("prueba", "jhony", TOKEN_PRUEBA, True)], ["https://testserver"])
+    return crear_app_real(*args, **kwargs)
+
+
+def TestClient(app):
+    return ClientePruebas(app, headers={"Authorization": f"Bearer {TOKEN_PRUEBA}"})
 
 
 class SesionFalsa:
@@ -14,7 +27,7 @@ class SesionFalsa:
     def cantidad_turnos(self) -> int:
         return len(self.preguntas)
 
-    def preguntar(self, pregunta: str, emitir_texto, emitir_cambio=None):
+    def preguntar(self, pregunta: str, emitir_texto, emitir_cambio=None, control=None):
         self.preguntas.append(pregunta)
         emitir_texto("Hola, ")
         emitir_texto("Jhony.")
@@ -37,6 +50,7 @@ class SesionFalsa:
         pregunta: str,
         emitir_texto,
         emitir_cambio=None,
+        control=None,
     ):
         self.ediciones.append((indice, pregunta))
         return self.preguntar(pregunta, emitir_texto, emitir_cambio)
@@ -212,8 +226,8 @@ def test_pagina_web() -> None:
     assert respuesta.status_code == 200
     assert "<title>ASTRO</title>" in respuesta.text
     assert 'rel="manifest"' in respuesta.text
-    assert 'src="/static/app.js?v=7"' in respuesta.text
-    assert 'href="/static/app.css?v=7"' in respuesta.text
+    assert 'src="/static/app.js?v=8"' in respuesta.text
+    assert 'href="/static/app.css?v=8"' in respuesta.text
 
 
 def test_manifiesto_pwa() -> None:
@@ -250,7 +264,7 @@ def test_websocket_transmite_respuesta() -> None:
     nucleo = NucleoFalso()
     with TestClient(crear_app(nucleo)) as cliente:
         with cliente.websocket_connect("/ws") as websocket:
-            assert websocket.receive_json() == {"type": "ready"}
+            assert websocket.receive_json()["type"] == "ready"
             websocket.send_json(
                 {"type": "message", "text": "Salúdame"}
             )
@@ -279,7 +293,7 @@ def test_websocket_edita_y_rebobina_antes_de_responder() -> None:
     nucleo = NucleoFalso()
     with TestClient(crear_app(nucleo)) as cliente:
         with cliente.websocket_connect("/ws") as websocket:
-            assert websocket.receive_json() == {"type": "ready"}
+            assert websocket.receive_json()["type"] == "ready"
             websocket.send_json(
                 {"type": "edit", "turn": 0, "text": "Texto corregido"}
             )

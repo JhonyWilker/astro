@@ -13,11 +13,20 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/icon.svg">
-  <link rel="stylesheet" href="/static/app.css?v=7">
-  <script src="/static/app.js?v=7" defer></script>
+  <link rel="stylesheet" href="/static/app.css?v=8">
+  <script src="/static/app.js?v=8" defer></script>
 </head>
 <body>
   <div class="app">
+    <div id="acceso" class="modal acceso-modal" hidden>
+      <form id="acceso-formulario" class="tarjeta-modal">
+        <p class="sobrelinea">Acceso privado</p>
+        <h2>Vincular dispositivo</h2>
+        <label>Clave de acceso a ASTRO<input id="clave-acceso" type="password" autocomplete="off" required maxlength="512"></label>
+        <button class="boton-accion" type="submit">Entrar</button>
+        <p id="error-acceso" role="status"></p>
+      </form>
+    </div>
     <header class="cabecera">
       <div class="marca">
         <img src="/static/icon.svg" alt="" width="46" height="46">
@@ -25,6 +34,7 @@
       </div>
       <div class="acciones">
         <button id="abrir-estado" class="boton-secundario" type="button">Estado</button>
+        <button id="detener" class="boton-secundario" type="button" disabled hidden>Detener</button>
         <button id="instalar" class="boton-secundario" type="button">Instalar</button>
         <div id="estado" class="estado conectando" role="status">
           <span class="punto"></span><span id="estado-texto">Conectando</span>

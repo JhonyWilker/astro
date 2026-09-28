@@ -8,6 +8,7 @@ services:
     env_file:
       - .env
       - .env.vapid
+      - .env.acceso
     environment:
       ASTRO_PUSH_DATA_PATH: /app/data/push_subscriptions.json
       ASTRO_VAPID_PRIVATE_KEY_PATH: /run/secrets/vapid_private_key

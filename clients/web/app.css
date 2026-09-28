@@ -72,6 +72,13 @@ textarea:disabled { opacity: 0.55; }
 .tarjeta-modal h2 { margin: 15px 0 12px; }
 .tarjeta-modal ol { padding-left: 22px; color: var(--texto); line-height: 1.8; }
 .tarjeta-modal p { margin-bottom: 0; color: var(--suave); line-height: 1.5; }
+.acceso-modal { z-index: 20; place-items: center; }
+.acceso-modal .tarjeta-modal { display: grid; gap: 14px; }
+.acceso-modal .tarjeta-modal h2 { margin: 0; }
+.acceso-modal label { display: grid; gap: 7px; color: var(--suave); font-size: 0.82rem; }
+.acceso-modal input { width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid var(--linea); border-radius: 12px; outline: 0; color: var(--texto); background: #07131f; }
+.acceso-modal input:focus { border-color: var(--cian); }
+#error-acceso { min-height: 24px; margin: 0; color: #fda4af; font-size: 0.8rem; }
 .cerrar { position: absolute; top: 12px; right: 12px; width: 42px; height: 42px; border: 0; border-radius: 50%; color: var(--texto); background: #122534; font-size: 1.5rem; }
 .sobrelinea { margin: 0 0 4px; color: var(--cian); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
 .panel h2 { margin-top: 0; }

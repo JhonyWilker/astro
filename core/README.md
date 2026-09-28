@@ -84,14 +84,16 @@ El número máximo de ejecuciones se define en `agente.pasos_herramienta_maximos
 - `POST /push/subscribe`: registra o actualiza una suscripción.
 - `POST /push/unsubscribe`: elimina una suscripción.
 - `POST /push/test`: envía un aviso de prueba a los dispositivos registrados.
+- `POST /auth/login`: vincula una clave de dispositivo y crea una cookie segura.
+- `POST /auth/logout`: elimina la cookie de acceso del navegador.
 - `GET /`: aplicación web instalable.
 - `WS /ws`: conversación en streaming.
 
-El servidor envía `ready` al conectar, uno o más mensajes `delta` durante la respuesta, `provider_change` cuando cambia la ruta y `done` al terminar, con el uso agregado del turno y el proveedor que completó la respuesta. Una edición entra como `edit`; cuando termina correctamente, el servidor envía `rewind` antes de la respuesta corregida. Los fallos se envían como `error`.
+La carcasa estática y `/health` son públicos dentro de la red privada. Las demás rutas y el WebSocket exigen una credencial declarada en `.env.acceso`. El servidor valida el origen web, limita cuerpos y tramas a 16 KiB, aplica límites de frecuencia y reserva los ajustes de IA y la prueba Push a dispositivos administradores. El navegador entrega una vez su clave a `/auth/login` y recibe una cookie `Secure`, `HttpOnly` y `SameSite=Strict`; los clientes Python usan `Bearer`.
 
-Cada WebSocket crea una `SesionASTRO` independiente. `core/sesion.py` comparte la configuración, la personalidad y el registro de herramientas, pero conserva el historial por conexión para que dos clientes no mezclen sus conversaciones.
+El protocolo 2 envía `ready` al conectar, uno o más `delta`, `provider_change` cuando cambia la ruta y `done` al terminar. El cliente confirma contenido con `ack` y `played`; puede enviar `cancel` y recibe `cancelled`. `busy` evita dos turnos simultáneos y `sync` actualiza otros dispositivos. Una edición entra como `edit`; si termina, el servidor envía `rewind` antes de la respuesta corregida. Los fallos se envían como `error`.
 
-El despliegue usa un único proceso de Uvicorn porque el historial todavía vive en memoria. La persistencia compartida llegará en el bloque de memoria.
+`core/conversaciones.py` asigna una conversación al usuario autenticado, no al socket. Voz, PWA y reconexiones comparten historial, con un solo turno activo a la vez. Al cancelar, ASTRO cierra el stream cuando el proveedor lo permite y conserva únicamente el prefijo confirmado por el cliente; las herramientas ya terminadas no se deshacen. El despliegue usa un único proceso de Uvicorn porque el historial continúa en memoria: reiniciar el VPS lo borra y la persistencia llegará en el bloque de memoria.
 
 ## Aplicación web instalable
 
@@ -100,6 +102,8 @@ El despliegue usa un único proceso de Uvicorn porque el historial todavía vive
 Cada mensaje confirmado de Jhony ofrece «Editar». Al guardar, el servidor reconstruye el historial hasta el turno anterior, genera la nueva respuesta y solo entonces confirma a la PWA que debe eliminar ese mensaje y todos los posteriores. Si la generación falla, conserva el historial original. Cancelar no realiza ninguna petición; el coste ya consumido permanece acumulado.
 
 El service worker cachea solo la carcasa visual para que la interfaz pueda abrirse aunque la red tarde. No intercepta el WebSocket ni guarda conversaciones. La URL preferida es `https://astro-vps.tailbee6db.ts.net/`.
+
+El cliente de voz acepta `--interrumpir-con-voz` para escuchar mientras reproduce y enviar `cancel` cuando Jhony habla encima. Hasta incorporar cancelación de eco en la fase 34, esta opción debe usarse con auriculares para que ASTRO no confunda su propia voz con una interrupción.
 
 ## Notificaciones Web Push
 

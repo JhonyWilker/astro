@@ -20,6 +20,7 @@ from core.errores import (
     guardar_registro_error,
 )
 from tools.registro import RegistroHerramientas
+from core.turno import ControlTurno, TurnoCancelado
 
 EmitirTexto = Callable[[str], None]
 EmitirCambio = Callable[[object], None]
@@ -107,6 +108,7 @@ class NucleoASTRO:
 class SesionASTRO:
     nucleo: NucleoASTRO
     historial: list[dict[str, str]] = field(default_factory=list)
+    herramientas_por_turno: list[tuple[str, ...]] = field(default_factory=list)
 
     @property
     def cantidad_turnos(self) -> int:
@@ -117,6 +119,7 @@ class SesionASTRO:
         pregunta: str,
         emitir_texto: EmitirTexto | None = None,
         emitir_cambio: EmitirCambio | None = None,
+        control: ControlTurno | None = None,
     ) -> ResultadoRespuesta:
         pregunta = pregunta.strip()
         if not pregunta:
@@ -133,8 +136,21 @@ class SesionASTRO:
                 emitir_cambio,
                 self.nucleo.registrar_fallo,
                 self.nucleo.registrar_exito,
+                tuple(self.herramientas_por_turno),
+                control,
             )
-        except (APIError, ErrorRespuestaASTRO) as error:
+        except TurnoCancelado:
+            contenido_confirmado = control.emitido[:control.confirmado]
+            self.historial.append({
+                "role": "assistant",
+                "content": contenido_confirmado or (
+                    "Respuesta detenida antes de reproducir contenido."
+                ),
+            })
+            self.herramientas_por_turno.append(tuple(control.herramientas))
+            control.historial_actualizado = True
+            raise
+        except Exception as error:
             self.historial.pop()
             guardar_registro_error(
                 crear_registro_error(
@@ -144,16 +160,12 @@ class SesionASTRO:
             )
             raise
 
-        contenido_historial = resultado.texto
-        if resultado.herramientas_usadas:
-            nombres = ", ".join(resultado.herramientas_usadas)
-            contenido_historial += (
-                "\n\n[Contexto interno de ASTRO: herramientas usadas "
-                f"en este turno: {nombres}.]"
-            )
         self.historial.append(
-            {"role": "assistant", "content": contenido_historial}
+            {"role": "assistant", "content": resultado.texto}
         )
+        self.herramientas_por_turno.append(resultado.herramientas_usadas)
+        if control:
+            control.historial_actualizado = True
         return resultado
 
     def editar_turno(
@@ -162,20 +174,27 @@ class SesionASTRO:
         pregunta: str,
         emitir_texto: EmitirTexto | None = None,
         emitir_cambio: EmitirCambio | None = None,
+        control: ControlTurno | None = None,
     ) -> ResultadoRespuesta:
         if type(indice) is not int or not 0 <= indice < self.cantidad_turnos:
             raise ValueError("El turno que intentas editar no existe")
 
         historial_original = self.historial
+        herramientas_originales = self.herramientas_por_turno
         self.historial = self.historial[: indice * 2]
+        self.herramientas_por_turno = self.herramientas_por_turno[:indice]
         try:
             return self.preguntar(
                 pregunta,
                 emitir_texto,
                 emitir_cambio,
+                control,
             )
         except Exception:
             self.historial = historial_original
+            self.herramientas_por_turno = herramientas_originales
+            if control:
+                control.historial_actualizado = False
             raise
 
 

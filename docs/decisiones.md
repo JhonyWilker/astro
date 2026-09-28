@@ -192,3 +192,31 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Jhony acepta cerrar la fase 28 con este funcionamiento y aplazar la optimización a la fase 36. Se conserva el modelo elegido y se configura `razonamiento: low`.
 - Motivo: Jhony considera suficiente la respuesta actual y prefiere perfeccionarla más adelante.
 - Consecuencia: El objetivo original de menos de tres segundos no se declara superado. Los 4,17 s se cuentan desde el final de la captura hasta antes de llamar al reproductor, excluyendo el silencio final del detector y la latencia del dispositivo. La fase 36 deberá medir desde el final real del habla hasta el inicio audible, además de desglosar transcripción, modelo y síntesis.
+
+## 2026-09-28 · Acceso por dispositivo y privilegio mínimo
+
+- Contexto: Tailscale limita la red, pero no identifica a la aplicación ni impide que una página abierta en un dispositivo del tailnet intente usar el WebSocket.
+- Decisión: Exigir tokens aleatorios distintos por dispositivo, validar el origen web y aplicar límites de tamaño, frecuencia y conexiones. La PWA cambia el token una sola vez por una cookie segura; los clientes locales usan Bearer. Solo los dispositivos administradores pueden cambiar la IA o enviar una notificación de prueba.
+- Motivo: Autenticar dentro de ASTRO, reducir el efecto de una credencial comprometida y cerrar HTTP y WebSocket con la misma política.
+- Consecuencia: Cada dispositivo debe vincularse. Revocarlo requiere retirar o rotar su token privado en `.env.acceso` y reiniciar el servicio. La carcasa estática y `/health` siguen accesibles dentro del tailnet, pero no exponen conversación ni ajustes.
+
+## 2026-09-28 · Procedencia estructurada del contexto
+
+- Contexto: Las antiguas etiquetas `[Contexto interno de ASTRO: ...]` vivían como texto dentro del historial y un usuario podía escribir una etiqueta idéntica.
+- Decisión: Guardar por separado el contenido conversacional y los nombres de herramientas ejecutadas. Solo el núcleo construye esos metadatos al preparar las instrucciones; ninguna etiqueta escrita en un mensaje cambia su autoridad.
+- Motivo: La confianza debe depender de quién creó el dato y no de una cadena reconocible.
+- Consecuencia: El historial visible queda limpio. Los futuros correos, páginas y sensores deberán entrar como datos no fiables con procedencia conservada, nunca como instrucciones por estar envueltos en una etiqueta.
+
+## 2026-09-28 · Conversación por usuario y cancelación confirmada
+
+- Contexto: Una reconexión creaba otra sesión y el servidor no podía leer `cancel` mientras esperaba al modelo.
+- Decisión: Separar conversación y socket mediante una identidad por usuario autenticado, permitir un solo turno simultáneo y ejecutar la generación en una tarea cancelable. Los clientes confirman cuántos caracteres han visto u oído; al cancelar se conserva únicamente ese prefijo.
+- Motivo: Dar continuidad entre voz y PWA y preparar la interrupción natural sin fingir que se oyó una respuesta completa.
+- Consecuencia: Las reconexiones y dispositivos de Jhony comparten conversación mientras el proceso vive. Reiniciar el VPS aún borra el historial. Cerrar el stream es cooperativo y una herramienta ya terminada no se revierte; las futuras acciones externas necesitarán idempotencia y confirmaciones propias.
+
+## 2026-09-28 · Respaldo independiente evaluado, no activado
+
+- Contexto: OpenRouter usando un modelo de OpenAI protege frente a fallos de ruta, clave o límite, pero conserva una dependencia común del generador.
+- Decisión: Mantener la configuración actual y registrar `google/gemini-3.8-flash` como candidato. La prueba sintética real mediante Responses API usó `calcular`, incorporó su resultado y respondió correctamente; no se modificó el proveedor activo ni el modelo de respaldo.
+- Motivo: Comprobar compatibilidad técnica antes de decidir si las conversaciones pueden enviarse a otra empresa.
+- Consecuencia: ASTRO continúa con OpenAI como principal y OpenRouter con el modelo actual como respaldo. Activar Gemini requerirá una decisión posterior de Jhony y aceptar que Google procese los mensajes enviados durante el respaldo.

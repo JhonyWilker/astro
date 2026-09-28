@@ -6,9 +6,11 @@ from argparse import ArgumentParser
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
+from threading import Event
 from typing import Any, Callable
 
 import websockets
+from dotenv import load_dotenv
 from websockets.exceptions import ConnectionClosed
 
 from voice.hablar import (
@@ -16,6 +18,7 @@ from voice.hablar import (
     crear_configuracion,
 )
 from voice.streaming import SegmentadorTexto, reproducir_cola_streaming
+from voice.interrupcion import escuchar_interrupcion
 from voice.detectar_voz import (
     ConfiguracionDeteccion,
     grabar_hasta_silencio,
@@ -87,6 +90,10 @@ async def recibir_respuesta(
             raise RuntimeError(
                 str(evento.get("message", "ASTRO devolvió un error"))
             )
+        elif tipo == "cancelled":
+            raise InterruptedError("Respuesta interrumpida")
+        elif tipo == "busy":
+            raise RuntimeError("Hay otro turno activo en esta conversación")
 
 
 def crear_argumentos() -> ArgumentParser:
@@ -110,6 +117,8 @@ def crear_argumentos() -> ArgumentParser:
     )
     argumentos.add_argument("--microfono", type=int)
     argumentos.add_argument("--altavoz", type=int)
+    argumentos.add_argument("--interrumpir-con-voz", action="store_true",
+                            help="Escuchar mientras responde; usar auriculares para evitar autoactivaciones.")
     argumentos.add_argument(
         "--modelo",
         default=MODELO_PREDETERMINADO,
@@ -123,6 +132,7 @@ def crear_argumentos() -> ArgumentParser:
 
 
 async def conversar(opciones: Any) -> None:
+    load_dotenv(RAIZ_PROYECTO / ".env")
     url = os.getenv("ASTRO_WS_URL", URL_PREDETERMINADA)
     configuracion_deteccion = ConfiguracionDeteccion(
         espera_maxima=opciones.espera_maxima,
@@ -137,7 +147,8 @@ async def conversar(opciones: Any) -> None:
     configuracion_voz = crear_configuracion(opciones.hablante)
 
     print(f"Conectando con ASTRO en {url}...")
-    async with websockets.connect(url) as websocket:
+    token = os.getenv("ASTRO_DEVICE_TOKEN", "")
+    async with websockets.connect(url, additional_headers={"Authorization": f"Bearer {token}"}) as websocket:
         listo = json.loads(await websocket.recv())
         if listo.get("type") != "ready":
             raise RuntimeError("ASTRO no confirmó la conexión")
@@ -193,6 +204,25 @@ async def conversar(opciones: Any) -> None:
             print("ASTRO: ", end="", flush=True)
 
             cola_texto: asyncio.Queue[str | None] = asyncio.Queue()
+            detener_audio = Event()
+            terminar_escucha = Event()
+            bucle = asyncio.get_running_loop()
+            generado = ""
+            posicion = 0
+
+            async def confirmar(cantidad):
+                await websocket.send(json.dumps({"type": "ack", "characters": cantidad}))
+
+            async def interrumpir():
+                detener_audio.set()
+                await websocket.send(json.dumps({"type": "cancel"}))
+
+            escucha = None
+            if opciones.interrumpir_con_voz:
+                escucha = asyncio.create_task(asyncio.to_thread(
+                    escuchar_interrupcion, opciones.microfono, terminar_escucha,
+                    lambda: asyncio.run_coroutine_threadsafe(interrumpir(), bucle),
+                ))
             segmentador = SegmentadorTexto()
             tarea_voz = asyncio.create_task(
                 reproducir_cola_streaming(
@@ -202,11 +232,15 @@ async def conversar(opciones: Any) -> None:
                     opciones.altavoz,
                     RUTA_RESPUESTA,
                     inicio_respuesta,
+                    detener=detener_audio,
+                    confirmar=confirmar,
                 )
             )
 
             def mostrar_y_preparar(fragmento: str) -> None:
                 nonlocal tiempo_primer_texto, tiempo_primer_fragmento
+                nonlocal generado, posicion
+                generado += fragmento
                 ahora = perf_counter()
                 if tiempo_primer_texto is None:
                     tiempo_primer_texto = ahora - inicio_respuesta
@@ -217,7 +251,8 @@ async def conversar(opciones: Any) -> None:
                 for parte in partes:
                     texto_hablado = limpiar_para_voz(parte)
                     if texto_hablado:
-                        cola_texto.put_nowait(texto_hablado)
+                        posicion = generado.find(parte, posicion) + len(parte)
+                        cola_texto.put_nowait((texto_hablado, posicion))
 
             try:
                 respuesta = await recibir_respuesta(
@@ -225,17 +260,35 @@ async def conversar(opciones: Any) -> None:
                     transcripcion.texto,
                     mostrar_y_preparar,
                 )
-            except BaseException:
+            except BaseException as error:
+                detener_audio.set()
+                terminar_escucha.set()
                 await cola_texto.put(None)
                 await tarea_voz
+                if escucha:
+                    await escucha
+                if isinstance(error, InterruptedError):
+                    print("\nRespuesta detenida. Pulsa Enter para la siguiente frase.")
+                    continue
+                await websocket.send(json.dumps({"type": "played", "characters": 0}))
                 raise
 
             for parte in segmentador.finalizar():
                 texto_hablado = limpiar_para_voz(parte)
                 if texto_hablado:
-                    await cola_texto.put(texto_hablado)
+                    await cola_texto.put((texto_hablado, len(generado)))
             await cola_texto.put(None)
             resultado_voz = await tarea_voz
+            terminar_escucha.set()
+            if escucha:
+                await escucha
+            if detener_audio.is_set():
+                # done puede llegar antes de que termine el audio: consumir la confirmación de cancelación.
+                while json.loads(await websocket.recv()).get("type") != "cancelled":
+                    pass
+                print("\nRespuesta detenida. Pulsa Enter para la siguiente frase.")
+                continue
+            await websocket.send(json.dumps({"type": "played", "characters": len(generado)}))
             if (
                 tiempo_primer_texto is None
                 or tiempo_primer_fragmento is None

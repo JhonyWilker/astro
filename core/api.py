@@ -1,6 +1,5 @@
 import asyncio
 from contextlib import asynccontextmanager
-from json import JSONDecodeError
 from pathlib import Path
 from secrets import compare_digest, token_urlsafe
 from time import monotonic
@@ -12,16 +11,17 @@ from fastapi import (
     HTTPException,
     Request,
     WebSocket,
-    WebSocketDisconnect,
 )
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from openai import APIError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from core.ajustes_ia import AjustesIA
+from core.acceso import Acceso, MiddlewareAcceso
+from core.canal import atender
+from core.conversaciones import Conversaciones
 from core.chat import explicar_error
-from core.errores import ErrorRespuestaASTRO
 from core.notificaciones import ErrorNotificaciones, ServicioNotificaciones
 from core.sesion import NucleoASTRO, crear_nucleo
 from core.uso import RegistroUso
@@ -106,6 +106,7 @@ def serializar_cambio(cambio) -> dict[str, object]:
 def crear_app(
     nucleo: NucleoASTRO | None = None,
     notificaciones: ServicioNotificaciones | None = None,
+    acceso: Acceso | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(aplicacion: FastAPI) -> AsyncIterator[None]:
@@ -127,6 +128,24 @@ def crear_app(
     aplicacion.state.inicio = monotonic()
     aplicacion.state.conexiones = 0
     aplicacion.state.csrf_ia = token_urlsafe(32)
+    acceso = acceso if acceso is not None else Acceso.desde_entorno()
+    conversaciones = Conversaciones()
+    aplicacion.add_middleware(MiddlewareAcceso, acceso=acceso)
+
+    @aplicacion.post("/auth/login")
+    async def login(request: Request):
+        respuesta = JSONResponse({"authenticated": True})
+        respuesta.set_cookie(
+            "astro_acceso", request.state.dispositivo.token,
+            secure=True, httponly=True, samesite="strict", max_age=2592000,
+        )
+        return respuesta
+
+    @aplicacion.post("/auth/logout")
+    async def logout():
+        respuesta = JSONResponse({"authenticated": False})
+        respuesta.delete_cookie("astro_acceso", secure=True, httponly=True, samesite="strict")
+        return respuesta
 
     @aplicacion.get("/health")
     async def health() -> dict[str, str]:
@@ -297,150 +316,10 @@ def crear_app(
 
     @aplicacion.websocket("/ws")
     async def websocket_chat(websocket: WebSocket) -> None:
-        await websocket.accept()
-        websocket.app.state.conexiones += 1
-        sesion = websocket.app.state.nucleo.nueva_sesion()
-        await websocket.send_json({"type": "ready"})
-        bucle = asyncio.get_running_loop()
-
-        try:
-            while True:
-                try:
-                    mensaje = await websocket.receive_json()
-                except JSONDecodeError:
-                    await websocket.send_json(
-                        {
-                            "type": "error",
-                            "message": "El mensaje debe ser JSON válido.",
-                        }
-                    )
-                    continue
-
-                if not isinstance(mensaje, dict):
-                    await websocket.send_json(
-                        {
-                            "type": "error",
-                            "message": "Envía un mensaje de texto no vacío.",
-                        }
-                    )
-                    continue
-
-                tipo = mensaje.get("type")
-                texto = mensaje.get("text")
-                turno_edicion = mensaje.get("turn")
-                es_edicion = (
-                    tipo == "edit"
-                    and type(turno_edicion) is int
-                    and turno_edicion >= 0
-                )
-                if (
-                    tipo not in {"message", "edit"}
-                    or not isinstance(texto, str)
-                    or not texto.strip()
-                    or (tipo == "edit" and not es_edicion)
-                ):
-                    await websocket.send_json(
-                        {
-                            "type": "error",
-                            "message": "Envía un mensaje de texto no vacío.",
-                        }
-                    )
-                    continue
-
-                texto = texto.strip()
-                turno = (
-                    turno_edicion
-                    if es_edicion
-                    else sesion.cantidad_turnos
-                )
-
-                def emitir_texto(fragmento: str) -> None:
-                    futuro = asyncio.run_coroutine_threadsafe(
-                        websocket.send_json(
-                            {"type": "delta", "text": fragmento}
-                        ),
-                        bucle,
-                    )
-                    futuro.result()
-
-                def emitir_cambio(cambio) -> None:
-                    futuro = asyncio.run_coroutine_threadsafe(
-                        websocket.send_json(serializar_cambio(cambio)),
-                        bucle,
-                    )
-                    futuro.result()
-
-                eventos_edicion: list[dict[str, object]] = []
-                try:
-                    if es_edicion:
-                        resultado = await asyncio.to_thread(
-                            sesion.editar_turno,
-                            turno,
-                            texto,
-                            lambda fragmento: eventos_edicion.append(
-                                {"type": "delta", "text": fragmento}
-                            ),
-                            lambda cambio: eventos_edicion.append(
-                                serializar_cambio(cambio)
-                            ),
-                        )
-                    else:
-                        resultado = await asyncio.to_thread(
-                            sesion.preguntar,
-                            texto,
-                            emitir_texto,
-                            emitir_cambio,
-                        )
-                except ValueError as error:
-                    await websocket.send_json(
-                        {"type": "error", "message": str(error)}
-                    )
-                    continue
-                except (APIError, ErrorRespuestaASTRO) as error:
-                    await websocket.send_json(
-                        {
-                            "type": "error",
-                            "message": explicar_error(
-                                error,
-                                str(
-                                    websocket.app.state.nucleo.estado_ia()[
-                                        "provider_name"
-                                    ]
-                                ),
-                            ),
-                        }
-                    )
-                    continue
-
-                if es_edicion:
-                    await websocket.send_json(
-                        {"type": "rewind", "turn": turno, "text": texto}
-                    )
-                    for evento in eventos_edicion:
-                        await websocket.send_json(evento)
-
-                await websocket.send_json(
-                    {
-                        "type": "done",
-                        "turn": turno,
-                        "usage": [
-                            serializar_uso(registro)
-                            for registro in resultado.registros
-                        ],
-                        "provider": resultado.proveedor_final,
-                        "model": resultado.modelo_final,
-                        "fallback_used": bool(
-                            resultado.cambios_proveedor
-                        ),
-                    }
-                )
-        except WebSocketDisconnect:
-            pass
-        finally:
-            websocket.app.state.conexiones = max(
-                0,
-                websocket.app.state.conexiones - 1,
-            )
+        await atender(
+            websocket, acceso, conversaciones, serializar_uso,
+            serializar_cambio, explicar_error,
+        )
 
     aplicacion.mount(
         "/static",

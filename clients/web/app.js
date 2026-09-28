@@ -47,6 +47,49 @@ let turnoSiguiente = 0;
 let turnoRespuesta = null;
 let sesionVisual = 0;
 let editorAbierto = null;
+let accesoNecesario = false;
+let caracteresRecibidos = 0;
+let ultimaConfirmacion = 0;
+const detener = document.querySelector("#detener");
+detener.addEventListener("click", () => {
+  if (socket?.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({type: "ack", characters: caracteresRecibidos}));
+    socket.send(JSON.stringify({type: "cancel"}));
+  }
+});
+
+function restaurarConversacion(evento) {
+  cancelarEdicion(); mensajes.replaceChildren();
+  sesionVisual = evento.session;
+  const historial = evento.history || [];
+  historial.forEach((item, indice) => {
+    const nodo = agregarMensaje(item.content, item.role === "user" ? "jhony" : "astro", Math.floor(indice / 2));
+    if (item.role === "user") nodo.closest(".mensaje").dataset.confirmed = "true";
+  });
+  turnoSiguiente = Math.floor(historial.length / 2);
+  respuestaActual = null;
+}
+const accesoCapa = document.querySelector("#acceso");
+const accesoFormulario = document.querySelector("#acceso-formulario");
+
+function solicitarAcceso() {
+  accesoNecesario = true;
+  accesoCapa.hidden = false;
+  mostrarEstado("desconectado", "Vincula este dispositivo");
+}
+accesoFormulario.addEventListener("submit", async (evento) => {
+  evento.preventDefault();
+  const campo = document.querySelector("#clave-acceso");
+  try {
+    await pedirJSON("/auth/login", {
+      method: "POST", headers: { Authorization: `Bearer ${campo.value.trim()}` },
+    });
+    campo.value = ""; accesoNecesario = false;
+    window.location.reload();
+  } catch {
+    document.querySelector("#error-acceso").textContent = "No se pudo vincular el dispositivo. Comprueba la clave.";
+  }
+});
 
 function mostrarEstado(tipo, texto) { estado.className = `estado ${tipo}`; estadoTexto.textContent = texto; }
 function desplazar() { mensajes.scrollTo({ top: mensajes.scrollHeight, behavior: "smooth" }); }
@@ -79,6 +122,8 @@ function agregarMensaje(texto, autor, turno = null) {
 function agregarSistema(texto) { ocultarBienvenida(); const elemento = document.createElement("p"); elemento.className = "sistema"; elemento.textContent = texto; mensajes.appendChild(elemento); desplazar(); }
 function ajustarEntrada() { entrada.style.height = "auto"; entrada.style.height = `${Math.min(entrada.scrollHeight, 132)}px`; }
 function habilitarEntrada() {
+  detener.disabled = !respondiendo;
+  detener.hidden = !respondiendo;
   const conectado = socket && socket.readyState === WebSocket.OPEN;
   entrada.disabled = !conectado || respondiendo; enviar.disabled = !conectado || respondiendo || !entrada.value.trim();
   document.querySelectorAll(".editar-mensaje").forEach((boton) => {
@@ -114,6 +159,7 @@ function iniciarEdicion(contenedor) {
     if (!texto) { campo.focus(); return; }
     if (texto === contenido.textContent) { cancelarEdicion(); return; }
     respondiendo = true; campo.disabled = true; guardar.disabled = true; cancelar.disabled = true; guardar.textContent = "Corrigiendo…";
+    caracteresRecibidos = 0;
     turnoRespuesta = Number(contenedor.dataset.turn); uso.hidden = true; habilitarEntrada();
     socket.send(JSON.stringify({ type: "edit", turn: turnoRespuesta, text: texto }));
   });
@@ -131,6 +177,7 @@ function aplicarRebobinado(turno, texto) {
 }
 async function pedirJSON(url, opciones = {}) {
   const respuesta = await fetch(url, opciones);
+  if (respuesta.status === 401) solicitarAcceso();
   const datos = await respuesta.json();
   if (!respuesta.ok) throw new Error(datos.detail || "La operación no pudo completarse.");
   return datos;
@@ -213,12 +260,14 @@ async function actualizarEstadoPush() {
   }
 }
 function programarReconexion() {
-  if (reintento || !navigator.onLine) return;
+  if (reintento || !navigator.onLine || accesoNecesario) return;
   mostrarEstado("desconectado", "Reconectando");
   reintento = window.setTimeout(() => { reintento = null; conectar(); }, esperaReconexion);
   esperaReconexion = Math.min(esperaReconexion * 2, 10000);
 }
-function conectar() {
+async function conectar() {
+  if (accesoNecesario) return;
+  try { await pedirJSON("/status"); } catch { if (!accesoNecesario) programarReconexion(); return; }
   if (socket && [WebSocket.OPEN, WebSocket.CONNECTING].includes(socket.readyState)) return;
   const protocolo = location.protocol === "https:" ? "wss:" : "ws:";
   mostrarEstado("conectando", "Conectando"); socket = new WebSocket(`${protocolo}//${location.host}/ws`);
@@ -227,15 +276,29 @@ function conectar() {
     try { evento = JSON.parse(data); } catch { agregarSistema("ASTRO recibió un mensaje que no pudo interpretar."); return; }
     if (evento.type === "ready") {
       mostrarEstado("conectado", "Conectado");
+      restaurarConversacion(evento);
       if (huboConexion) {
-        sesionVisual += 1; turnoSiguiente = 0; turnoRespuesta = null; cancelarEdicion();
-        agregarSistema("Conexión restablecida. Comienza una sesión nueva.");
+        turnoRespuesta = null;
+        agregarSistema("Conexión restablecida. Conversación recuperada.");
         reiniciarUsoSesion();
       }
       huboConexion = true; esperaReconexion = 1000; respondiendo = false; habilitarEntrada(); entrada.focus(); return;
     }
+    if (evento.type === "sync") { restaurarConversacion(evento); habilitarEntrada(); return; }
+    if (evento.type === "cancelled") {
+      respondiendo = false; respuestaActual = null; cancelarEdicion();
+      agregarSistema("Respuesta detenida."); habilitarEntrada(); return;
+    }
+    if (evento.type === "busy") {
+      respondiendo = false; agregarSistema(evento.message); habilitarEntrada(); return;
+    }
     if (evento.type === "rewind") { aplicarRebobinado(evento.turn, evento.text); return; }
     if (evento.type === "delta") {
+      caracteresRecibidos += [...evento.text].length;
+      if (performance.now() - ultimaConfirmacion > 250) {
+        socket.send(JSON.stringify({type: "ack", characters: caracteresRecibidos}));
+        ultimaConfirmacion = performance.now();
+      }
       if (!respuestaActual) respuestaActual = agregarMensaje("", "astro", turnoRespuesta);
       respuestaActual.textContent += evento.text; desplazar(); return;
     }
@@ -249,6 +312,7 @@ function conectar() {
       estadoProveedor.textContent = evento.to; return;
     }
     if (evento.type === "done") {
+      socket.send(JSON.stringify({type: "played", characters: caracteresRecibidos}));
       const registros = Array.isArray(evento.usage) ? evento.usage : [];
       peticionesSesion += registros.length;
       tokensSesion += registros.reduce((total, item) => total + item.tokens, 0);
@@ -266,6 +330,7 @@ function conectar() {
       editorAbierto = null; uso.hidden = false; respuestaActual = null; respondiendo = false; habilitarEntrada(); entrada.focus(); return;
     }
     if (evento.type === "error") {
+      socket.send(JSON.stringify({type: "played", characters: caracteresRecibidos}));
       const eraEdicion = Boolean(editorAbierto); respondiendo = false;
       if (eraEdicion) cancelarEdicion(); else if (Number.isInteger(turnoRespuesta)) turnoSiguiente = turnoRespuesta;
       agregarSistema(`Error: ${evento.message}`); respuestaActual = null; habilitarEntrada();
@@ -281,6 +346,7 @@ formulario.addEventListener("submit", (evento) => {
   evento.preventDefault(); const texto = entrada.value.trim();
   if (!texto || !socket || socket.readyState !== WebSocket.OPEN) return;
   turnoRespuesta = turnoSiguiente; turnoSiguiente += 1;
+  caracteresRecibidos = 0;
   agregarMensaje(texto, "jhony", turnoRespuesta); socket.send(JSON.stringify({ type: "message", text: texto }));
   entrada.value = ""; ajustarEntrada(); respuestaActual = null; respondiendo = true; uso.hidden = true; habilitarEntrada();
 });
@@ -379,7 +445,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) cone
 if (window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone) instalar.hidden = true;
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/service-worker.js?v=7").catch(() => agregarSistema("La instalación sin conexión no está disponible."));
+    navigator.serviceWorker.register("/service-worker.js?v=8").catch(() => agregarSistema("La instalación sin conexión no está disponible."));
   });
 }
 pedirJSON("/push/public-key")
