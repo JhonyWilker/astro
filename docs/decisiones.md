@@ -164,3 +164,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Usar `faster-whisper==1.2.1` con el modelo multilingüe `base`, idioma español fijado, búsqueda de 5 haces, CPU y cuantización `int8`. El modelo se guarda bajo `data/models/faster-whisper`, fuera de Git.
 - Motivo: El modelo base ofrece una primera transcripción correcta con una descarga de unos 148 MB, funciona en el portátil sin CUDA y procesa localmente el audio. La CPU permite completar esta fase sin instalar controladores adicionales.
 - Consecuencia: La primera ejecución descarga el modelo y las siguientes pueden reutilizarlo localmente. La detección automática del final de la voz se mantiene para la fase 27 y la optimización con GPU, si resulta necesaria, para la fase 36.
+
+## 2026-09-28 · Piper como voz local provisional
+
+- Contexto: ASTRO necesita hablar sin internet y sin consumir una API. El Piper original dejó de mantenerse y el desarrollo actual continúa en `OHF-Voice/piper1-gpl` con licencia GPL-3.0-or-later.
+- Decisión: Usar `piper-tts==1.8.0` como motor local y `es_ES-sharvard-medium`, hablante masculino `M` con identificador 0, como voz provisional. El modelo y los WAV se guardan bajo `data`, fuera de Git. La salida es mono PCM de 16 bits a 22.050 Hz.
+- Motivo: La voz funciona completamente en local, genera audio más rápido que su duración y permite elegir explícitamente un hablante masculino de español de España.
+- Consecuencia: Piper puede usarse en el ASTRO privado actual. Antes de distribuir ASTRO o extraer el módulo del restaurante como producto habrá que revisar y cumplir la GPL, o aislar o sustituir el motor. La voz definitiva y el respaldo automático con ElevenLabs se decidirán en la fase 35.
