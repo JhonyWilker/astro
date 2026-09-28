@@ -171,3 +171,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Usar `piper-tts==1.8.0` como motor local y `es_ES-sharvard-medium`, hablante masculino `M` con identificador 0, como voz provisional. El modelo y los WAV se guardan bajo `data`, fuera de Git. La salida es mono PCM de 16 bits a 22.050 Hz.
 - Motivo: La voz funciona completamente en local, genera audio más rápido que su duración y permite elegir explícitamente un hablante masculino de español de España.
 - Consecuencia: Piper puede usarse en el ASTRO privado actual. Antes de distribuir ASTRO o extraer el módulo del restaurante como producto habrá que revisar y cumplir la GPL, o aislar o sustituir el motor. La voz definitiva y el respaldo automático con ElevenLabs se decidirán en la fase 35.
+
+## 2026-09-28 · Conversación de voz manual de extremo a extremo
+
+- Contexto: Las fases 23 a 25 probaron por separado la captura, la transcripción y la síntesis; faltaba unirlas con el núcleo remoto sin perder el historial.
+- Decisión: Mantener un único WebSocket por conversación y ejecutar captura, Whisper y Piper en el nodo local. Enter inicia una grabación fija de seis segundos; solo la transcripción y la respuesta textual atraviesan la conexión privada con el VPS.
+- Motivo: Reutilizar componentes probados, conservar una sesión coherente y evitar enviar grabaciones privadas al servidor o a proveedores externos.
+- Consecuencia: Ya funciona el primer diálogo hablado completo. La duración fija puede cortar una frase o esperar de más, por lo que será sustituida por detección de fin de voz en la fase 27.

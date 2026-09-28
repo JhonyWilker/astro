@@ -86,3 +86,16 @@ Para grabar cinco segundos:
 Se puede elegir otra entrada añadiendo `--dispositivo NUMERO`. En el portátil de Jhony, la entrada WASAPI número 12 capturó correctamente a 48 kHz durante la prueba de la fase 23. El número puede cambiar al conectar o desconectar dispositivos, por lo que debe comprobarse de nuevo con `--listar`.
 
 El resultado predeterminado es `data/audio/prueba.wav`, en formato WAV mono PCM de 16 bits. La carpeta `data` está excluida de Git porque puede contener voz privada.
+
+## Conversación de voz manual
+
+La fase 26 une la captura, la transcripción, el núcleo remoto y la síntesis en una sola sesión. En el portátil probado:
+
+```powershell
+$env:ASTRO_WS_URL="wss://astro-vps.tailbee6db.ts.net/ws"
+.\.venv\Scripts\python.exe -m clients.voz --microfono 1 --altavoz 3
+```
+
+Pulsa Enter, habla durante seis segundos y espera la respuesta hablada. Puedes repetir sin perder el historial; escribe `salir` en lugar de pulsar solo Enter para cerrar. La duración se cambia con `--segundos NUMERO`.
+
+Los números de los dispositivos pueden cambiar. Usa `python -m clients.grabar_audio --listar` para revisar micrófonos y las herramientas de `sounddevice` para revisar salidas. Esta versión usa una duración fija deliberadamente: la detección automática del final del habla corresponde a la fase 27.
