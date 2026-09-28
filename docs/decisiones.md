@@ -178,3 +178,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Mantener un único WebSocket por conversación y ejecutar captura, Whisper y Piper en el nodo local. Enter inicia una grabación fija de seis segundos; solo la transcripción y la respuesta textual atraviesan la conexión privada con el VPS.
 - Motivo: Reutilizar componentes probados, conservar una sesión coherente y evitar enviar grabaciones privadas al servidor o a proveedores externos.
 - Consecuencia: Ya funciona el primer diálogo hablado completo. La duración fija puede cortar una frase o esperar de más, por lo que será sustituida por detección de fin de voz en la fase 27.
+
+## 2026-09-28 · Detección local del final del habla
+
+- Contexto: La conversación de voz esperaba siempre seis segundos, aunque Jhony hubiese terminado antes, y podía cortar intervenciones más largas.
+- Decisión: Detectar voz localmente mediante RMS adaptado al ruido previo, bloques PCM16 de 30 ms y una ventana de activación. Conservar 0,3 segundos anteriores al inicio y cerrar después de 1 segundo continuo de silencio, con límites configurables de espera y duración.
+- Motivo: El audio ya está disponible como PCM16 y puede analizarse sin otra dependencia, sin enviar grabaciones privadas y sin imponer una duración fija.
+- Consecuencia: Las frases cortas terminan pronto y las pausas naturales inferiores a un segundo se conservan. Los entornos ruidosos necesitarán pruebas más amplias en la fase 38 y podrán motivar un detector neuronal si la medición demuestra que hace falta.

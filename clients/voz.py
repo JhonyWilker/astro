@@ -10,12 +10,15 @@ from typing import Any, Callable
 import websockets
 from websockets.exceptions import ConnectionClosed
 
-from clients.grabar_audio import grabar_audio
 from voice.hablar import (
     cargar_voz,
     crear_configuracion,
     reproducir_wav,
     sintetizar,
+)
+from voice.detectar_voz import (
+    ConfiguracionDeteccion,
+    grabar_hasta_silencio,
 )
 from voice.transcribir import (
     MODELO_PREDETERMINADO,
@@ -90,7 +93,21 @@ def crear_argumentos() -> ArgumentParser:
     argumentos = ArgumentParser(
         description="Conversación de voz manual con ASTRO.",
     )
-    argumentos.add_argument("--segundos", type=float, default=6.0)
+    argumentos.add_argument(
+        "--espera-maxima",
+        type=float,
+        default=5.0,
+    )
+    argumentos.add_argument(
+        "--duracion-maxima",
+        type=float,
+        default=30.0,
+    )
+    argumentos.add_argument(
+        "--silencio-final",
+        type=float,
+        default=1.0,
+    )
     argumentos.add_argument("--microfono", type=int)
     argumentos.add_argument("--altavoz", type=int)
     argumentos.add_argument(
@@ -107,6 +124,11 @@ def crear_argumentos() -> ArgumentParser:
 
 async def conversar(opciones: Any) -> None:
     url = os.getenv("ASTRO_WS_URL", URL_PREDETERMINADA)
+    configuracion_deteccion = ConfiguracionDeteccion(
+        espera_maxima=opciones.espera_maxima,
+        duracion_maxima=opciones.duracion_maxima,
+        silencio_final=opciones.silencio_final,
+    )
 
     print(f"Cargando Whisper {opciones.modelo} en CPU...")
     modelo = await asyncio.to_thread(cargar_modelo, opciones.modelo)
@@ -134,25 +156,29 @@ async def conversar(opciones: Any) -> None:
                 print("Pulsa solo Enter para iniciar una grabación.")
                 continue
 
+            print("Escuchando... Habla ahora.")
+            try:
+                informe, microfono, desbordamientos = (
+                    await asyncio.to_thread(
+                        grabar_hasta_silencio,
+                        RUTA_PREGUNTA,
+                        opciones.microfono,
+                        configuracion_deteccion,
+                    )
+                )
+            except ValueError as error:
+                print(f"No se pudo obtener una frase: {error}")
+                continue
+
             print(
-                f"Escuchando durante {opciones.segundos:g} segundos..."
+                f"Micrófono: {microfono} · "
+                f"{informe.duracion_segundos:.2f} s"
             )
-            informe, microfono, desbordamientos = await asyncio.to_thread(
-                grabar_audio,
-                opciones.segundos,
-                RUTA_PREGUNTA,
-                opciones.microfono,
-            )
-            print(f"Micrófono: {microfono}")
             if desbordamientos:
                 print(
                     "Aviso: hubo "
                     f"{desbordamientos} desbordamiento(s) de audio."
                 )
-            if informe.rms < 50:
-                print("No he oído voz suficiente. Inténtalo otra vez.")
-                continue
-
             print("Transcribiendo...")
             transcripcion = await asyncio.to_thread(
                 transcribir_audio,

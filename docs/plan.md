@@ -176,7 +176,7 @@ Objetivo: hablar con ASTRO diciendo solo "Astro", en conversación continua, con
 | 24 | ✅ Voz a texto con faster-whisper | Transcripción correcta en español |
 | 25 | ✅ Texto a voz con Piper | ASTRO lee una frase en voz alta |
 | 26 | ✅ Pulsar tecla → hablar → respuesta hablada | Primera conversación por voz |
-| 27 | Detección de voz: saber cuándo terminas de hablar | Sin cortar ni esperar de más |
+| 27 | ✅ Detección de voz: saber cuándo terminas de hablar | Sin cortar ni esperar de más |
 | 28 | Voz en streaming: empieza a hablar antes de terminar de pensar | Primera palabra en menos de 3 s |
 | 29 | Wake word propio: entrenar el modelo para "Astro" | Se activa con "Astro", sin "hey" |
 | 30 | Estados: dormido, escuchando, pensando, ejecutando, hablando | Indicador visual y sonoro de cada estado |
@@ -419,7 +419,7 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **27 — Detección de voz: saber cuándo terminas de hablar.** Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **28 — Voz en streaming: empieza a hablar antes de terminar de pensar.** Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |

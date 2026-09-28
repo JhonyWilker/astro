@@ -96,6 +96,8 @@ $env:ASTRO_WS_URL="wss://astro-vps.tailbee6db.ts.net/ws"
 .\.venv\Scripts\python.exe -m clients.voz --microfono 1 --altavoz 3
 ```
 
-Pulsa Enter, habla durante seis segundos y espera la respuesta hablada. Puedes repetir sin perder el historial; escribe `salir` en lugar de pulsar solo Enter para cerrar. La duración se cambia con `--segundos NUMERO`.
+Pulsa Enter, habla y espera la respuesta. El cliente conserva unos instantes anteriores al inicio de la voz y termina automáticamente después de 1 segundo de silencio. Puedes repetir sin perder el historial; escribe `salir` en lugar de pulsar solo Enter para cerrar.
 
-Los números de los dispositivos pueden cambiar. Usa `python -m clients.grabar_audio --listar` para revisar micrófonos y las herramientas de `sounddevice` para revisar salidas. Esta versión usa una duración fija deliberadamente: la detección automática del final del habla corresponde a la fase 27.
+La espera inicial máxima es de 5 segundos y una intervención puede durar hasta 30 segundos. Se pueden ajustar con `--espera-maxima`, `--duracion-maxima` y `--silencio-final`. Los límites evitan que el micrófono quede abierto indefinidamente.
+
+Los números de los dispositivos pueden cambiar. Usa `python -m clients.grabar_audio --listar` para revisar micrófonos y las herramientas de `sounddevice` para revisar salidas. La detección usa el nivel de la señal y se adapta al ruido observado antes de que comience la voz.
