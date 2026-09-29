@@ -3,7 +3,7 @@ import json
 import os
 import re
 from argparse import ArgumentParser
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from time import perf_counter
 from threading import Event
@@ -13,6 +13,13 @@ import websockets
 from dotenv import load_dotenv
 from websockets.exceptions import ConnectionClosed
 
+from voice.activacion import (
+    Activacion,
+    DetectorActivacion,
+    configuracion_predeterminada,
+    registrar_activacion,
+)
+from voice.escucha import ConfiguracionFrase, EscuchaContinua
 from voice.hablar import (
     cargar_voz,
     crear_configuracion,
@@ -116,6 +123,14 @@ def crear_argumentos() -> ArgumentParser:
         default=1.0,
     )
     argumentos.add_argument("--microfono", type=int)
+    argumentos.add_argument(
+        "--activacion",
+        action="store_true",
+        help="Esperar la palabra de activación en vez de pulsar Enter.",
+    )
+    argumentos.add_argument("--modelo-activacion", type=Path)
+    argumentos.add_argument("--umbral-activacion", type=float)
+    argumentos.add_argument("--bloques-activacion", type=int)
     argumentos.add_argument("--altavoz", type=int)
     argumentos.add_argument("--interrumpir-con-voz", action="store_true",
                             help="Escuchar mientras responde; usar auriculares para evitar autoactivaciones.")
@@ -146,6 +161,38 @@ async def conversar(opciones: Any) -> None:
     voz = await asyncio.to_thread(cargar_voz)
     configuracion_voz = crear_configuracion(opciones.hablante)
 
+    escucha = None
+    configuracion_frase = ConfiguracionFrase(
+        espera_maxima=opciones.espera_maxima,
+        duracion_maxima=opciones.duracion_maxima,
+        silencio_final=opciones.silencio_final,
+    )
+    if opciones.activacion:
+        print("Cargando el detector de «Astro»...")
+        cambios = {
+            campo: valor
+            for campo, valor in (
+                ("umbral", opciones.umbral_activacion),
+                ("bloques_consecutivos", opciones.bloques_activacion),
+            )
+            if valor is not None
+        }
+        detector = await asyncio.to_thread(
+            DetectorActivacion,
+            replace(
+                configuracion_predeterminada(opciones.modelo_activacion),
+                **cambios,
+            ),
+        )
+        escucha = EscuchaContinua(
+            detector,
+            dispositivo=opciones.microfono,
+        )
+
+    def mostrar_activacion(activacion: Activacion) -> None:
+        registrar_activacion(activacion)
+        print(f"Activado ({activacion.puntuacion:.2f}). Te escucho...")
+
     print(f"Conectando con ASTRO en {url}...")
     token = os.getenv("ASTRO_DEVICE_TOKEN", "")
     async with websockets.connect(url, additional_headers={"Authorization": f"Bearer {token}"}) as websocket:
@@ -154,32 +201,56 @@ async def conversar(opciones: Any) -> None:
             raise RuntimeError("ASTRO no confirmó la conexión")
 
         print("ASTRO conectado.")
-        print("Pulsa Enter para hablar o escribe 'salir' para terminar.")
+        if escucha is not None:
+            print("Di «Astro» para hablar. Pulsa Ctrl+C para terminar.")
+        else:
+            print("Pulsa Enter para hablar o escribe 'salir' para terminar.")
 
         while True:
-            orden = (
-                await asyncio.to_thread(input, "\n[Enter] Hablar: ")
-            ).strip()
-            if orden.lower() == "salir":
-                print("Hasta luego, Jhony.")
-                return
-            if orden:
-                print("Pulsa solo Enter para iniciar una grabación.")
-                continue
-
-            print("Escuchando... Habla ahora.")
-            try:
-                informe, microfono, desbordamientos = (
-                    await asyncio.to_thread(
-                        grabar_hasta_silencio,
+            if escucha is not None:
+                print("\nDormido. Esperando «Astro»...")
+                cancelar = Event()
+                try:
+                    resultado_escucha = await asyncio.to_thread(
+                        escucha.esperar_frase,
                         RUTA_PREGUNTA,
-                        opciones.microfono,
-                        configuracion_deteccion,
+                        configuracion_frase,
+                        cancelar,
+                        mostrar_activacion,
                     )
-                )
-            except ValueError as error:
-                print(f"No se pudo obtener una frase: {error}")
-                continue
+                except asyncio.CancelledError:
+                    cancelar.set()
+                    raise
+                except ValueError as error:
+                    print(f"No se pudo obtener una frase: {error}")
+                    continue
+                informe = resultado_escucha.informe
+                microfono = escucha.nombre_dispositivo()
+                desbordamientos = resultado_escucha.desbordamientos
+            else:
+                orden = (
+                    await asyncio.to_thread(input, "\n[Enter] Hablar: ")
+                ).strip()
+                if orden.lower() == "salir":
+                    print("Hasta luego, Jhony.")
+                    return
+                if orden:
+                    print("Pulsa solo Enter para iniciar una grabación.")
+                    continue
+
+                print("Escuchando... Habla ahora.")
+                try:
+                    informe, microfono, desbordamientos = (
+                        await asyncio.to_thread(
+                            grabar_hasta_silencio,
+                            RUTA_PREGUNTA,
+                            opciones.microfono,
+                            configuracion_deteccion,
+                        )
+                    )
+                except ValueError as error:
+                    print(f"No se pudo obtener una frase: {error}")
+                    continue
 
             print(
                 f"Micrófono: {microfono} · "

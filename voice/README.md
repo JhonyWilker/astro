@@ -23,3 +23,40 @@ Para generar y escuchar una frase con la voz local de ASTRO:
 ASTRO usa por defecto el hablante masculino de `es_ES-sharvard-medium`. Se puede probar el femenino con `--hablante F` y generar el WAV sin reproducirlo con `--sin-reproducir`.
 
 La voz y los audios se guardan bajo `data`, fuera de Git. La síntesis funciona localmente y no consume ninguna API.
+
+## Activación con «Astro» (fase 29)
+
+ASTRO escucha de forma continua a 16 kHz y solo se activa al oír su nombre.
+
+| Módulo | Qué hace |
+| --- | --- |
+| `vad_silero.py` | Detección de voz con Silero VAD en ONNX (sin `torch`) |
+| `activacion.py` | Detector de la palabra de activación. Cuenta solo si hubo voz en el último segundo y descansa 2 s tras activarse |
+| `modelo_astro.py` | Modelo propio de «Astro»: huellas de openWakeWord más una red pequeña en `.npz` |
+| `escucha.py` | Un solo micrófono: espera la activación y captura la frase siguiente hasta el silencio |
+| `probar_activacion.py` | Escucha sin conectar con ASTRO y cuenta activaciones, para medir falsos positivos |
+
+Probar el detector sin servidor (Ctrl+C para terminar y ver el resumen):
+
+```powershell
+.\.venv\Scripts\python.exe -m voice.probar_activacion --minutos 60 --microfono 1
+```
+
+Conversación por voz esperando «Astro» en vez de Enter:
+
+```powershell
+.\.venv\Scripts\python.exe -m clients.voz --activacion --microfono 1
+```
+
+Cada activación se anota en `logs/activaciones.jsonl` (hora, modelo y puntuación; nunca audio).
+
+### Entrenar el modelo de «Astro»
+
+Todo se hace en local. Los datos, los modelos y las grabaciones viven en `data/wakeword`, fuera de Git.
+
+1. `python -m voice.grabar_muestras --microfono 1`: ASTRO te habla por los altavoces y graba unas 70 muestras de tu voz (unos 7 minutos).
+2. `python -m voice.generar_sinteticos`: genera con Piper miles de clips con 9 voces españolas. Se puede repartir con `--voces`.
+3. Descargar corpus de habla real (por ejemplo los de OpenSLR, licencia CC BY-SA 4.0) en `data/wakeword/corpus/*.zip`.
+4. `python -m voice.entrenar_activacion`: prepara los datos (ruido, reverberación, fondo de habla), entrena con minado de negativas difíciles y guarda `data/models/wakeword/astro_v1.npz` junto con los ajustes recomendados.
+
+Si se cambia de micrófono, conviene volver a grabar las muestras.
