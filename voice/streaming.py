@@ -76,6 +76,12 @@ class SegmentadorTexto:
         return None
 
 
+@dataclass(frozen=True)
+class FragmentoVoz:
+    texto: str
+    expresion: str | None = None
+
+
 async def reproducir_cola_streaming(
     cola_texto: asyncio.Queue[str | None],
     voz: Any,
@@ -103,8 +109,12 @@ async def reproducir_cola_streaming(
                 if texto is None:
                     return
                 confirmado = None
+                expresion = None
                 if isinstance(texto, tuple):
-                    texto, confirmado = texto
+                    if len(texto) == 3:
+                        texto, confirmado, expresion = texto
+                    else:
+                        texto, confirmado = texto
                 if detener is not None and detener.is_set():
                     continue
                 indice += 1
@@ -113,7 +123,7 @@ async def reproducir_cola_streaming(
                 )
                 await asyncio.to_thread(
                     sintetizador,
-                    texto,
+                    FragmentoVoz(texto, expresion),
                     voz,
                     configuracion_voz,
                     ruta,

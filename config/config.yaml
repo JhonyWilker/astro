@@ -37,13 +37,12 @@ voz:
     base_url: https://api.elevenlabs.io
     clave_entorno: ELEVENLABS_API_KEY
     voice_id: RRpWawPJ96ird1KfHTVi
-    modelo: eleven_flash_v2_5
+    modelo: eleven_v4
     formato: pcm_22050
     frecuencia_hz: 22050
     timeout_segundos: 8
     estabilidad: 1.0
-    similitud: 0.65
-    velocidad: 1.0
+    similitud: 0.84
 
 limites:
   tokens_salida_maximos: 2000

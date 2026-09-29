@@ -121,6 +121,7 @@ async def recibir_respuesta(
     texto: str,
     mostrar_fragmento: Callable[[str], None] | None = None,
     cambiar_estado: Callable[[str, str | None], None] | None = None,
+    cambiar_expresion: Callable[[str], None] | None = None,
 ) -> RespuestaRemota:
     await websocket.send(
         json.dumps(
@@ -139,6 +140,12 @@ async def recibir_respuesta(
             fragmentos.append(fragmento)
             if mostrar_fragmento is not None:
                 mostrar_fragmento(fragmento)
+        elif tipo == "voice_style":
+            direccion = evento.get("direction")
+            if not isinstance(direccion, str) or not direccion.strip():
+                raise RuntimeError("ASTRO envió una expresión de voz no válida")
+            if cambiar_expresion is not None:
+                cambiar_expresion(direccion.strip())
         elif tipo == "state":
             estado = str(evento.get("state", ""))
             if estado not in {"thinking", "executing"}:
@@ -257,7 +264,7 @@ async def conversar(opciones: Any) -> None:
     configuracion_voz = crear_configuracion(opciones.hablante)
     sintetizador_voz = crear_sintetizador_voz(voz, configuracion_voz)
     if sintetizador_voz.principal_disponible:
-        print("Voz principal: ASTRO en ElevenLabs Flash v2.5; respaldo: Piper.")
+        print("Voz principal: ASTRO expresivo en ElevenLabs v4; respaldo: Piper.")
     else:
         print("Voz principal no disponible; se usará Piper como respaldo.")
     indicador = IndicadorEstados(
@@ -497,6 +504,7 @@ async def conversar(opciones: Any) -> None:
             bucle = asyncio.get_running_loop()
             generado = ""
             posicion = 0
+            expresion_actual: str | None = None
 
             async def confirmar(cantidad):
                 await websocket.send(json.dumps({"type": "ack", "characters": cantidad}))
@@ -541,7 +549,13 @@ async def conversar(opciones: Any) -> None:
                     texto_hablado = limpiar_para_voz(parte)
                     if texto_hablado:
                         posicion = generado.find(parte, posicion) + len(parte)
-                        cola_texto.put_nowait((texto_hablado, posicion))
+                        cola_texto.put_nowait(
+                            (texto_hablado, posicion, expresion_actual)
+                        )
+
+            def cambiar_expresion(direccion: str) -> None:
+                nonlocal expresion_actual
+                expresion_actual = direccion
 
             try:
                 respuesta = await recibir_respuesta(
@@ -549,6 +563,7 @@ async def conversar(opciones: Any) -> None:
                     transcripcion.texto,
                     mostrar_y_preparar,
                     mostrar_estado_remoto,
+                    cambiar_expresion,
                 )
             except BaseException as error:
                 control_interrupcion.evento.set()
@@ -576,7 +591,9 @@ async def conversar(opciones: Any) -> None:
                     tiempo_primer_fragmento = perf_counter() - inicio_respuesta
                 texto_hablado = limpiar_para_voz(parte)
                 if texto_hablado:
-                    await cola_texto.put((texto_hablado, len(generado)))
+                    await cola_texto.put(
+                        (texto_hablado, len(generado), expresion_actual)
+                    )
             await cola_texto.put(None)
             resultado_voz = await tarea_voz
             if detener_audio.is_set():

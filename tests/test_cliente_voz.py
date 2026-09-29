@@ -64,6 +64,31 @@ def test_recibir_respuesta_reune_streaming_y_uso() -> None:
     assert respuesta.coste_usd == pytest.approx(0.0012)
 
 
+def test_recibir_respuesta_publica_expresion_sin_sumarla_al_texto() -> None:
+    websocket = WebSocketFalso(
+        [
+            {
+                "type": "voice_style",
+                "direction": "deeply relieved, soft, quietly joyful",
+            },
+            {"type": "delta", "text": "Todo ha salido bien."},
+            {"type": "done", "usage": []},
+        ]
+    )
+    expresiones = []
+
+    respuesta = asyncio.run(
+        recibir_respuesta(
+            websocket,
+            "¿Qué ha pasado?",
+            cambiar_expresion=expresiones.append,
+        )
+    )
+
+    assert respuesta.texto == "Todo ha salido bien."
+    assert expresiones == ["deeply relieved, soft, quietly joyful"]
+
+
 def test_comprobar_destinatario_interpreta_respuesta_y_uso() -> None:
     websocket = WebSocketFalso([{
         "type": "direction",

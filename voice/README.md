@@ -20,7 +20,9 @@ Para generar y escuchar una frase directamente con la voz local de respaldo:
 .\.venv\Scripts\python.exe -m voice.hablar "Hola, Jhony."
 ```
 
-El cliente conversacional usa como voz principal la voz original `ASTRO` de ElevenLabs con `eleven_flash_v2_5`. La identidad, el modelo y los parámetros públicos están en `config/config.yaml`; la clave vive únicamente en `.env` como `ELEVENLABS_API_KEY`.
+El cliente conversacional usa como voz principal la voz original `ASTRO` de ElevenLabs con `eleven_v4`. La identidad, el modelo y los parámetros públicos están en `config/config.yaml`; la clave vive únicamente en `.env` como `ELEVENLABS_API_KEY`.
+
+El cerebro añade a cada frase una dirección vocal privada y de vocabulario abierto: puede combinar cualquier emoción, intensidad, ritmo y matiz que exija el contexto, sin depender de una lista cerrada. El núcleo separa esos metadatos del texto visible y del historial; el cliente los valida y los aplica únicamente a la copia enviada al sintetizador. Las etiquetas procedentes del usuario o de contenido externo se neutralizan para que solo el canal interno de ASTRO controle la interpretación vocal.
 
 Cada fragmento intenta primero ElevenLabs. Si la clave falta o la red, la cuenta o el servicio fallan, el mismo fragmento se sintetiza automáticamente con Piper. El respaldo usa el hablante masculino de `es_ES-sharvard-medium` y no necesita Internet.
 

@@ -88,7 +88,7 @@ El flujo va de arriba abajo: ASTRO oye su nombre, transcribe, el núcleo decide 
 | Núcleo, memoria, contexto, proactividad | Código propio | Es lo que hace a ASTRO único | Se construye |
 | Modelo de lenguaje | ChatGPT vía API, con capa propia para cambiar de modelo | Razonamiento mediante un servicio externo sin mantener servidores de IA | Se reutiliza |
 | Voz a texto | faster-whisper (local) | Gratis, privado, buen español | Se reutiliza |
-| Texto a voz | ElevenLabs (modelo Flash) como voz principal; Piper local de respaldo y para frases cortas | La mejor voz disponible, y sigue hablando si falla la nube | Se reutiliza |
+| Texto a voz | ElevenLabs v4 como voz principal expresiva; Piper local de respaldo | Interpretación emocional abierta, y sigue hablando si falla la nube | Se reutiliza |
 | Wake word | openWakeWord con modelo entrenado para "Astro" | Permite palabra propia, sin "hey" | Se entrena |
 | Detección de voz | Silero VAD | Saber cuándo empiezas y terminas de hablar | Se reutiliza |
 | Base de datos | SQLite → PostgreSQL + pgvector | Empezar simple, escalar cuando haga falta | Se reutiliza |
@@ -187,7 +187,7 @@ Objetivo: hablar con ASTRO diciendo solo "Astro", en conversación continua, con
 | 32 | ✅ "No es contigo": detectar si la frase iba dirigida a ASTRO y volver a dormir | Descarta frases ajenas y registra el falso positivo |
 | 33 | ✅ Interrupción: hablar encima y que se calle | Se detiene en menos de 0,5 s |
 | 34 | ✅ Cancelación de eco: que no se oiga a sí mismo | Sin autoactivaciones con altavoz |
-| 35 | ✅ Voz propia de ASTRO: diseñarla en ElevenLabs (modelo Flash, sin clonar a ninguna persona real) y elegir plan con los datos de uso de la fase 16 | Voz configurada, con cambio automático a Piper si falla la nube |
+| 35 | ✅ Voz propia de ASTRO: diseñarla en ElevenLabs v4 (sin clonar a ninguna persona real), dotarla de interpretación emocional y elegir plan con los datos de uso de la fase 16 | Voz expresiva configurada, con cambio automático a Piper si falla la nube |
 | 36 | Optimizar latencia | Primera palabra en menos de 2 s |
 | 37 | ASTRO como servicio que arranca con el PC | Disponible sin abrir nada |
 | 38 | Pruebas de voz con 50 frases grabadas | 90% entendidas correctamente |

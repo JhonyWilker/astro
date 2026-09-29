@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import wave
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -41,7 +42,6 @@ class ConfiguracionVoz:
     base_url: str
     estabilidad: float
     similitud: float
-    velocidad: float
 
 
 def cargar_configuracion_voz(ruta: Path = RUTA_CONFIG) -> ConfiguracionVoz:
@@ -66,7 +66,6 @@ def cargar_configuracion_voz(ruta: Path = RUTA_CONFIG) -> ConfiguracionVoz:
         base_url=str(nube.get("base_url", "")),
         estabilidad=float(nube.get("estabilidad", -1)),
         similitud=float(nube.get("similitud", -1)),
-        velocidad=float(nube.get("velocidad", 0)),
     )
     _validar_configuracion(configuracion)
     return configuracion
@@ -81,8 +80,8 @@ def _validar_configuracion(configuracion: ConfiguracionVoz) -> None:
         raise ValueError("El cambio automático de voz debe estar activo")
     if not configuracion.voice_id:
         raise ValueError("Falta voice_id en la configuración de voz")
-    if configuracion.modelo != "eleven_flash_v2_5":
-        raise ValueError("La fase 35 requiere eleven_flash_v2_5")
+    if configuracion.modelo != "eleven_v4":
+        raise ValueError("La voz expresiva de ASTRO requiere eleven_v4")
     if configuracion.formato != f"pcm_{configuracion.frecuencia_hz}":
         raise ValueError("El formato PCM no coincide con su frecuencia")
     if configuracion.frecuencia_hz not in {16000, 22050, 24000}:
@@ -97,8 +96,38 @@ def _validar_configuracion(configuracion: ConfiguracionVoz) -> None:
         raise ValueError("estabilidad debe estar entre 0 y 1")
     if not 0 <= configuracion.similitud <= 1:
         raise ValueError("similitud debe estar entre 0 y 1")
-    if not 0.7 <= configuracion.velocidad <= 1.2:
-        raise ValueError("velocidad debe estar entre 0.7 y 1.2")
+
+
+EXPRESION_NEUTRA = "warm, natural, conversational"
+PATRON_DIRECCION = re.compile(r"[A-Za-z][A-Za-z ,'-]{2,119}")
+EFECTOS_NO_VOCALES = {
+    "applause", "explosion", "gunshot", "music", "sing", "singing",
+    "sound effect", "thunder", "whistle", "whistling",
+}
+
+
+def normalizar_direccion_voz(direccion: str | None) -> str:
+    """Acepta matices abiertos, pero únicamente como dirección vocal."""
+    if not isinstance(direccion, str):
+        return EXPRESION_NEUTRA
+    candidata = " ".join(direccion.strip(" []").split())
+    if not PATRON_DIRECCION.fullmatch(candidata):
+        return EXPRESION_NEUTRA
+    normalizada = candidata.casefold()
+    if any(efecto in normalizada for efecto in EFECTOS_NO_VOCALES):
+        return EXPRESION_NEUTRA
+    return candidata
+
+
+def preparar_texto_expresivo(
+    texto: str,
+    direccion: str | None = None,
+) -> str:
+    texto_limpio = re.sub(r"\[([^\]]*)\]", r"(\1)", texto).strip()
+    if not texto_limpio:
+        raise ValueError("El texto no puede estar vacío")
+    expresion = normalizar_direccion_voz(direccion)
+    return f"[{expresion}] {texto_limpio}"
 
 
 def sintetizar_elevenlabs(
@@ -124,9 +153,6 @@ def sintetizar_elevenlabs(
             "voice_settings": {
                 "stability": configuracion.estabilidad,
                 "similarity_boost": configuracion.similitud,
-                "style": 0.0,
-                "use_speaker_boost": True,
-                "speed": configuracion.velocidad,
             },
         }
     ).encode("utf-8")
@@ -181,6 +207,7 @@ def registrar_uso_voz(
     *,
     respaldo: bool,
     error: str | None = None,
+    caracteres_enviados: int | None = None,
     ruta: Path = RUTA_USO,
 ) -> None:
     registro = {
@@ -190,6 +217,8 @@ def registrar_uso_voz(
         "resultado": resultado,
         "respaldo": respaldo,
     }
+    if caracteres_enviados is not None:
+        registro["caracteres_enviados"] = caracteres_enviados
     if error is not None:
         registro["error"] = error
     ruta.parent.mkdir(parents=True, exist_ok=True)
@@ -223,45 +252,55 @@ class SintetizadorConRespaldo:
 
     def __call__(
         self,
-        texto: str,
+        texto: Any,
         _voz: Any,
         _configuracion: Any,
         salida: Path,
     ) -> InformeSintesis:
+        direccion = getattr(texto, "expresion", None)
+        texto_plano = getattr(texto, "texto", texto)
+        if not isinstance(texto_plano, str):
+            raise TypeError("El fragmento de voz debe contener texto")
         if self.clave:
+            texto_expresivo = preparar_texto_expresivo(
+                texto_plano,
+                direccion,
+            )
             try:
                 informe = self.sintetizador_nube(
-                    texto,
+                    texto_expresivo,
                     self.clave,
                     self.configuracion,
                     salida,
                 )
                 self._registrar(
-                    texto,
+                    texto_plano,
                     "elevenlabs",
                     "ok",
                     respaldo=False,
+                    caracteres_enviados=len(texto_expresivo),
                 )
                 return informe
             except Exception as error:
                 self._registrar(
-                    texto,
+                    texto_plano,
                     "elevenlabs",
                     "error",
                     respaldo=False,
                     error=type(error).__name__,
+                    caracteres_enviados=len(texto_expresivo),
                 )
 
         if not self.configuracion.cambio_automatico:
             raise RuntimeError("La voz principal no está disponible")
         informe = self.sintetizador_local(
-            texto,
+            texto_plano,
             self.voz_piper,
             self.configuracion_piper,
             salida,
         )
         self._registrar(
-            texto,
+            texto_plano,
             "piper",
             "ok",
             respaldo=True,

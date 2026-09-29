@@ -75,6 +75,15 @@ async def atender(
                     enviar(evento), bucle
                 ).result(timeout=10)
 
+        def expresion(direccion):
+            evento = {"type": "voice_style", "direction": direccion}
+            if edicion:
+                eventos.append(evento)
+            else:
+                asyncio.run_coroutine_threadsafe(
+                    enviar(evento), bucle
+                ).result(timeout=10)
+
         try:
             if edicion:
                 resultado = await asyncio.to_thread(
@@ -85,6 +94,7 @@ async def atender(
                     cambio,
                     ctl,
                     progreso,
+                    expresion,
                 )
                 await enviar({"type": "rewind", "turn": indice, "text": texto})
                 for evento in eventos:
@@ -97,6 +107,7 @@ async def atender(
                     cambio,
                     ctl,
                     progreso,
+                    expresion,
                 )
             ctl.generacion_completa = True
             await enviar({

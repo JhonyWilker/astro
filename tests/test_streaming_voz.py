@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from voice.streaming import (
+    FragmentoVoz,
     SegmentadorTexto,
     reproducir_cola_streaming,
 )
@@ -70,8 +71,8 @@ def test_streaming_sintetiza_y_reproduce_en_orden(
     resultado = asyncio.run(ejecutar_prueba())
 
     assert sintetizados == [
-        ("Primero.", "respuesta-001.wav"),
-        ("Segundo.", "respuesta-002.wav"),
+        (FragmentoVoz("Primero."), "respuesta-001.wav"),
+        (FragmentoVoz("Segundo."), "respuesta-002.wav"),
     ]
     assert reproducidos == [
         ("respuesta-001.wav", 3),
@@ -117,3 +118,31 @@ def test_streaming_interrumpido_no_confirma_fragmento(tmp_path: Path) -> None:
     assert resultado.fragmentos == 0
     assert confirmados == []
     assert control.latencia_segundos is not None
+
+
+def test_streaming_conserva_la_expresion_del_fragmento(
+    tmp_path: Path,
+) -> None:
+    recibidos = []
+
+    async def ejecutar_prueba():
+        cola = asyncio.Queue()
+        await cola.put(("Una noticia.", 12, "excited, amazed, warmly proud"))
+        await cola.put(None)
+        return await reproducir_cola_streaming(
+            cola,
+            object(),
+            object(),
+            None,
+            tmp_path / "respuesta.wav",
+            inicio=0.0,
+            sintetizador=lambda fragmento, *_: recibidos.append(fragmento),
+            reproductor=lambda *_: False,
+            reloj=lambda: 0.1,
+        )
+
+    asyncio.run(ejecutar_prueba())
+
+    assert recibidos == [
+        FragmentoVoz("Una noticia.", "excited, amazed, warmly proud")
+    ]

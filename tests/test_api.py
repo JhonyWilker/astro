@@ -35,11 +35,14 @@ class SesionFalsa:
         emitir_cambio=None,
         control=None,
         emitir_progreso=None,
+        emitir_expresion=None,
     ):
         self.preguntas.append(pregunta)
         if pregunta == "Calcula":
             emitir_progreso("executing", "calcular")
             emitir_progreso("thinking", None)
+        if pregunta == "Expresion":
+            emitir_expresion("calmly delighted, warm, subtly amused")
         emitir_texto("Hola, ")
         emitir_texto("Jhony.")
         registro = SimpleNamespace(
@@ -79,6 +82,7 @@ class SesionFalsa:
         emitir_cambio=None,
         control=None,
         emitir_progreso=None,
+        emitir_expresion=None,
     ):
         self.ediciones.append((indice, pregunta))
         return self.preguntar(
@@ -87,6 +91,7 @@ class SesionFalsa:
             emitir_cambio,
             control,
             emitir_progreso,
+            emitir_expresion,
         )
 
 
@@ -331,6 +336,28 @@ def test_websocket_transmite_respuesta() -> None:
         }
     ]
     assert nucleo.sesion.preguntas == ["Salúdame"]
+
+
+def test_websocket_transmite_expresion_por_un_canal_separado() -> None:
+    nucleo = NucleoFalso()
+    with TestClient(crear_app(nucleo)) as cliente:
+        with cliente.websocket_connect("/ws") as websocket:
+            assert websocket.receive_json()["type"] == "ready"
+            websocket.send_json({"type": "message", "text": "Expresion"})
+
+            assert websocket.receive_json() == {
+                "type": "voice_style",
+                "direction": "calmly delighted, warm, subtly amused",
+            }
+            assert websocket.receive_json() == {
+                "type": "delta",
+                "text": "Hola, ",
+            }
+            assert websocket.receive_json() == {
+                "type": "delta",
+                "text": "Jhony.",
+            }
+            assert websocket.receive_json()["type"] == "done"
 
 
 def test_websocket_clasifica_sin_abrir_un_turno() -> None:
