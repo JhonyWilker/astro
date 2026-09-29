@@ -21,6 +21,7 @@ from core.errores import (
     crear_registro_error,
     guardar_registro_error,
 )
+from core.direccion import ResultadoDireccion, clasificar_con_rutas
 from tools.registro import RegistroHerramientas
 from core.turno import ControlTurno, TurnoCancelado
 
@@ -180,6 +181,28 @@ class SesionASTRO:
         if control:
             control.historial_actualizado = True
         return resultado
+
+    def clasificar_destinatario(
+        self,
+        texto: str,
+        origen: str,
+    ) -> ResultadoDireccion:
+        ultima_respuesta = next(
+            (
+                mensaje["content"]
+                for mensaje in reversed(self.historial)
+                if mensaje["role"] == "assistant"
+            ),
+            "",
+        )
+        return clasificar_con_rutas(
+            self.nucleo.rutas_para_turno(),
+            texto,
+            origen,
+            ultima_respuesta,
+            self.nucleo.registrar_fallo,
+            self.nucleo.registrar_exito,
+        )
 
     def editar_turno(
         self,

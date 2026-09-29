@@ -298,3 +298,11 @@ Formato:
 - Decidido: La frase inicial no consume los cinco seguimientos. Una transcripción fallida no consume turno; una cancelación cierra la ventana. Los límites son configurables.
 - Criterio de salida: Con una sola activación, Jhony completó cinco seguimientos sin decir «Astro», mantuvo azul → verde → verde nueve y ASTRO volvió automáticamente a dormido.
 - Siguiente: fase 32 — detectar «no es contigo».
+
+## 2026-09-29 · Fase 32 — «No es contigo»
+
+- Hecho: Se añadió una clasificación estructurada de destinatario para cada frase de seguimiento, usando el proveedor y modelo activos con el mismo respaldo automático. Las transcripciones se envían como datos no fiables y la salida queda limitada a seis motivos. Las frases ajenas o dudosas no entran en el historial, no consumen un seguimiento, no reciben respuesta y cierran la ventana para volver a dormido. El registro local conserva únicamente fecha, origen, motivo y longitud. La petición de clasificación se incluye en tokens y coste visibles. Se corrigió además la medición del primer fragmento en respuestas de una sola palabra. El VPS se desplegó con copia previa, quedó saludable y pasaron 164 pruebas.
+- Falló: La primera versión clasificaba también la frase posterior al wake word. Como la grabación comienza después de oír «Astro», el modelo no veía la activación y rechazaba órdenes legítimas como dudosas. Se corrigió aceptando directamente la primera frase y clasificando solo seguimientos. La primera prueba física también descubrió que una respuesta corta («listo») cerraba el cliente al no marcar el fragmento liberado al final; se corrigió la medición.
+- Decidido: Una activación válida ya demuestra que la primera frase va dirigida a ASTRO. En seguimiento, cualquier duda se descarta de forma segura. Un fallo del clasificador hace que ASTRO calle y duerma. Nunca se registra la transcripción descartada.
+- Criterio de salida: Jhony dijo «Recuerda la palabra faro» tras activar ASTRO; una frase posterior dirigida a María fue clasificada `other_person`, no obtuvo respuesta y devolvió ASTRO a dormido. La siguiente activación conservó «faro» en el contexto, demostrando que la frase ajena no contaminó el historial.
+- Siguiente: fase 33 — interrupción: hablar encima y que se calle.

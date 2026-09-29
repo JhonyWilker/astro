@@ -32,6 +32,7 @@ from voice.hablar import (
 from voice.streaming import SegmentadorTexto, reproducir_cola_streaming
 from voice.interrupcion import escuchar_interrupcion
 from voice.seguimiento import VentanaSeguimiento
+from voice.destinatario import registrar_falso_positivo
 from voice.detectar_voz import (
     ConfiguracionDeteccion,
     grabar_hasta_silencio,
@@ -55,6 +56,56 @@ class RespuestaRemota:
     peticiones: int
     tokens: int
     coste_usd: float
+
+
+@dataclass(frozen=True)
+class DireccionRemota:
+    dirigida: bool
+    motivo: str
+    peticiones: int
+    tokens: int
+    coste_usd: float
+
+
+def confirmar_activacion() -> DireccionRemota:
+    """La palabra de activación ya confirmó a quién iba la frase."""
+    return DireccionRemota(
+        dirigida=True,
+        motivo="direct_mention",
+        peticiones=0,
+        tokens=0,
+        coste_usd=0.0,
+    )
+
+
+async def comprobar_destinatario(
+    websocket: Any,
+    texto: str,
+    origen: str,
+) -> DireccionRemota:
+    await websocket.send(json.dumps({
+        "type": "classify_direction",
+        "text": texto,
+        "origin": origen,
+    }, ensure_ascii=False))
+    evento = json.loads(await websocket.recv())
+    tipo = evento.get("type")
+    if tipo == "error":
+        raise RuntimeError(
+            str(evento.get("message", "No se pudo comprobar el destinatario"))
+        )
+    if tipo == "busy":
+        raise RuntimeError("Hay otro turno activo en esta conversación")
+    if tipo != "direction":
+        raise RuntimeError("ASTRO no confirmó el destinatario de la frase")
+    uso = evento.get("usage", [])
+    return DireccionRemota(
+        dirigida=evento.get("addressed") is True,
+        motivo=str(evento.get("reason", "uncertain")),
+        peticiones=len(uso),
+        tokens=sum(int(item["tokens"]) for item in uso),
+        coste_usd=sum(float(item["coste_estimado_usd"]) for item in uso),
+    )
 
 
 def limpiar_para_voz(texto: str) -> str:
@@ -371,9 +422,47 @@ async def conversar(opciones: Any) -> None:
                     ventana_seguimiento.cerrar()
                     indicador.cambiar(EstadoVoz.DORMIDO)
                 continue
+            tiempo_transcripcion = perf_counter() - inicio_respuesta
+            origen = "followup" if es_seguimiento else "activation"
+            if es_seguimiento:
+                indicador.cambiar(
+                    EstadoVoz.PENSANDO,
+                    "Comprobando destinatario",
+                )
+                try:
+                    direccion = await comprobar_destinatario(
+                        websocket,
+                        transcripcion.texto,
+                        origen,
+                    )
+                except RuntimeError as error:
+                    ventana_seguimiento.cerrar()
+                    print(f"No pude comprobar si me hablabas: {error}")
+                    indicador.cambiar(EstadoVoz.DORMIDO)
+                    continue
+            else:
+                # El detector ya oyó «Astro»; la grabación empieza después.
+                direccion = confirmar_activacion()
+            if not direccion.dirigida:
+                registrar_falso_positivo(
+                    origen,
+                    direccion.motivo,
+                    len(transcripcion.texto),
+                )
+                ventana_seguimiento.cerrar()
+                print(
+                    "Frase ajena descartada "
+                    f"({direccion.motivo}); ASTRO vuelve a dormir."
+                )
+                print(
+                    f"[{direccion.peticiones} petición/es de clasificación | "
+                    f"{direccion.tokens} tokens | "
+                    f"{direccion.coste_usd:.6f} USD estimados]"
+                )
+                indicador.cambiar(EstadoVoz.DORMIDO)
+                continue
             if es_seguimiento:
                 ventana_seguimiento.consumir()
-            tiempo_transcripcion = perf_counter() - inicio_respuesta
             tiempo_primer_texto: float | None = None
             tiempo_primer_fragmento: float | None = None
             print(f"Jhony: {transcripcion.texto}")
@@ -456,6 +545,8 @@ async def conversar(opciones: Any) -> None:
                 raise
 
             for parte in segmentador.finalizar():
+                if tiempo_primer_fragmento is None:
+                    tiempo_primer_fragmento = perf_counter() - inicio_respuesta
                 texto_hablado = limpiar_para_voz(parte)
                 if texto_hablado:
                     await cola_texto.put((texto_hablado, len(generado)))
@@ -483,9 +574,9 @@ async def conversar(opciones: Any) -> None:
 
             print()
             print(
-                f"[{respuesta.peticiones} petición/es | "
-                f"{respuesta.tokens} tokens | "
-                f"{respuesta.coste_usd:.6f} USD estimados]"
+                f"[{respuesta.peticiones + direccion.peticiones} petición/es | "
+                f"{respuesta.tokens + direccion.tokens} tokens | "
+                f"{respuesta.coste_usd + direccion.coste_usd:.6f} USD estimados]"
             )
             print(
                 "Latencia acumulada: "

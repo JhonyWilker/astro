@@ -3,7 +3,13 @@ import json
 
 import pytest
 
-from clients.voz import crear_argumentos, limpiar_para_voz, recibir_respuesta
+from clients.voz import (
+    comprobar_destinatario,
+    confirmar_activacion,
+    crear_argumentos,
+    limpiar_para_voz,
+    recibir_respuesta,
+)
 
 
 class WebSocketFalso:
@@ -56,6 +62,28 @@ def test_recibir_respuesta_reune_streaming_y_uso() -> None:
     assert respuesta.peticiones == 2
     assert respuesta.tokens == 120
     assert respuesta.coste_usd == pytest.approx(0.0012)
+
+
+def test_comprobar_destinatario_interpreta_respuesta_y_uso() -> None:
+    websocket = WebSocketFalso([{
+        "type": "direction",
+        "addressed": False,
+        "reason": "other_person",
+        "usage": [{"tokens": 9, "coste_estimado_usd": 0.0003}],
+    }])
+
+    resultado = asyncio.run(comprobar_destinatario(
+        websocket, "María, ven", "followup"
+    ))
+
+    assert websocket.enviados == [{
+        "type": "classify_direction",
+        "text": "María, ven",
+        "origin": "followup",
+    }]
+    assert resultado.dirigida is False
+    assert resultado.motivo == "other_person"
+    assert resultado.tokens == 9
 
 
 def test_recibir_respuesta_publica_estados_de_herramienta() -> None:
@@ -117,3 +145,10 @@ def test_seguimiento_predeterminado_ofrece_cinco_turnos_y_ocho_segundos() -> Non
 
     assert opciones.turnos_seguimiento == 5
     assert opciones.espera_seguimiento == pytest.approx(8.0)
+
+
+def test_activacion_confirmada_no_necesita_clasificacion() -> None:
+    direccion = confirmar_activacion()
+
+    assert direccion.dirigida is True
+    assert direccion.peticiones == 0

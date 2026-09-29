@@ -189,6 +189,54 @@ async def atender(
                     control.confirmar(mensaje.get("characters"))
                 await terminar()
                 continue
+            if tipo == "classify_direction":
+                texto = mensaje.get("text")
+                origen = mensaje.get("origin")
+                if (
+                    not isinstance(texto, str)
+                    or not texto.strip()
+                    or len(texto) > 4000
+                    or origen not in {"activation", "followup"}
+                ):
+                    await enviar({
+                        "type": "error",
+                        "message": "Clasificación de voz no válida.",
+                    })
+                    continue
+                if conversacion.bloqueo.locked():
+                    await enviar({
+                        "type": "busy",
+                        "message": "Otro turno sigue activo en esta conversación.",
+                    })
+                    continue
+                await conversacion.bloqueo.acquire()
+                try:
+                    resultado = await asyncio.to_thread(
+                        sesion.clasificar_destinatario,
+                        texto.strip(),
+                        origen,
+                    )
+                    await enviar({
+                        "type": "direction",
+                        "addressed": resultado.dirigida,
+                        "reason": resultado.motivo,
+                        "usage": [
+                            serializar_uso(item)
+                            for item in resultado.registros
+                        ],
+                        "provider": resultado.proveedor_final,
+                        "model": resultado.modelo_final,
+                        "fallback_used": resultado.uso_respaldo,
+                    })
+                except Exception as error:
+                    await enviar({
+                        "type": "error",
+                        "message": explicar_error(error),
+                    })
+                finally:
+                    conversacion.ultimo_uso = monotonic()
+                    conversacion.bloqueo.release()
+                continue
             texto = mensaje.get("text")
             if tipo not in {"message", "edit"} or not isinstance(texto, str) or not texto.strip() or len(texto) > 4000:
                 await enviar({"type": "error", "message": "Envía un texto de 1 a 4000 caracteres."})

@@ -22,6 +22,7 @@ class SesionFalsa:
     def __init__(self) -> None:
         self.preguntas: list[str] = []
         self.ediciones: list[tuple[int, str]] = []
+        self.clasificaciones: list[tuple[str, str]] = []
 
     @property
     def cantidad_turnos(self) -> int:
@@ -52,6 +53,22 @@ class SesionFalsa:
             proveedor_final="prueba",
             modelo_final="modelo-prueba",
             cambios_proveedor=(),
+        )
+
+    def clasificar_destinatario(self, texto: str, origen: str):
+        self.clasificaciones.append((texto, origen))
+        registro = SimpleNamespace(
+            tokens_totales=7,
+            duracion_segundos=0.05,
+            coste_estimado_usd=0.0001,
+        )
+        return SimpleNamespace(
+            dirigida=texto != "María, ¿quieres café?",
+            motivo=("continuation" if texto != "María, ¿quieres café?" else "other_person"),
+            registros=(registro,),
+            proveedor_final="prueba",
+            modelo_final="modelo-prueba",
+            uso_respaldo=False,
         )
 
     def editar_turno(
@@ -314,6 +331,34 @@ def test_websocket_transmite_respuesta() -> None:
         }
     ]
     assert nucleo.sesion.preguntas == ["Salúdame"]
+
+
+def test_websocket_clasifica_sin_abrir_un_turno() -> None:
+    nucleo = NucleoFalso()
+    with TestClient(crear_app(nucleo)) as cliente:
+        with cliente.websocket_connect("/ws") as websocket:
+            assert websocket.receive_json()["type"] == "ready"
+            websocket.send_json({
+                "type": "classify_direction",
+                "text": "María, ¿quieres café?",
+                "origin": "followup",
+            })
+            resultado = websocket.receive_json()
+
+    assert resultado == {
+        "type": "direction",
+        "addressed": False,
+        "reason": "other_person",
+        "usage": [{
+            "tokens": 7,
+            "segundos": 0.05,
+            "coste_estimado_usd": 0.0001,
+        }],
+        "provider": "prueba",
+        "model": "modelo-prueba",
+        "fallback_used": False,
+    }
+    assert nucleo.sesion.preguntas == []
 
 
 def test_websocket_transmite_el_estado_real_de_una_herramienta() -> None:

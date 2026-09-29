@@ -253,3 +253,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Contexto: Exigir «Astro» delante de cada frase impide una conversación natural, pero dejar el micrófono abierto indefinidamente aumenta falsas capturas y gasto.
 - Decisión: Después de una activación, el cliente local permite cinco intervenciones adicionales y espera un máximo de ocho segundos para que comience cada una. La primera frase activada no consume ese cupo. Solo una frase transcrita consume un seguimiento; el silencio termina la ventana y una transcripción fallida permite reintentar.
 - Consecuencia: Los seis turnos comparten el mismo WebSocket y el mismo historial del núcleo sin cambios en el VPS. Tras el quinto seguimiento, una cancelación o inactividad, ASTRO vuelve a dormido. `--turnos-seguimiento` y `--espera-seguimiento` permiten ajustar los límites sin tocar código.
+
+## 2026-09-29 · Destinatario conservador en seguimientos de voz
+
+- Contexto: Durante la ventana continua, el micrófono puede capturar una frase dirigida a otra persona. La primera grabación, en cambio, comienza después de que el detector ya haya oído «Astro».
+- Decisión: Aceptar directamente la primera frase activada y clasificar solo los seguimientos mediante salida JSON estructurada. Usar la última respuesta de ASTRO como contexto, tratar toda transcripción como dato no fiable y descartar frases ajenas, ambientales o dudosas. El descarte cierra la ventana y solo registra metadatos.
+- Motivo: Evitar respuestas a conversaciones ajenas sin rechazar órdenes legítimas cuya palabra de activación ya no forma parte del audio transcrito.
+- Consecuencia: Cada seguimiento hablado añade una petición pequeña al modelo. Ante duda o fallo, ASTRO calla y duerme; la frase no entra en el historial. La calidad depende de Whisper y se medirá con el conjunto de la fase 38.
