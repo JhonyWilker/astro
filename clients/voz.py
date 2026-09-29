@@ -25,12 +25,13 @@ from voice.escucha import (
     validar_configuracion as validar_configuracion_frase,
 )
 from voice.estados import EstadoVoz, IndicadorEstados
+from voice.eco import CanceladorEco
 from voice.hablar import (
     cargar_voz,
     crear_configuracion,
 )
 from voice.streaming import SegmentadorTexto, reproducir_cola_streaming
-from voice.interrupcion import ControlInterrupcion, escuchar_interrupcion
+from voice.interrupcion import ControlInterrupcion, DetectorInterrupcionEco
 from voice.seguimiento import VentanaSeguimiento
 from voice.destinatario import registrar_falso_positivo
 from voice.detectar_voz import (
@@ -220,7 +221,13 @@ def crear_argumentos() -> ArgumentParser:
         help="Mostrar los estados sin reproducir sus señales sonoras.",
     )
     argumentos.add_argument("--interrumpir-con-voz", action="store_true",
-                            help="Escuchar mientras responde; usar auriculares para evitar autoactivaciones.")
+        help="Escuchar mientras responde y retirar su propia voz con AEC3.")
+    argumentos.add_argument(
+        "--retardo-eco",
+        type=int,
+        default=0,
+        help="Retardo altavoz-micrófono para WebRTC AEC3 (0-500 ms).",
+    )
     argumentos.add_argument(
         "--modelo",
         default=MODELO_PREDETERMINADO,
@@ -250,6 +257,11 @@ async def conversar(opciones: Any) -> None:
     indicador = IndicadorEstados(
         dispositivo=opciones.altavoz,
         sonidos=not opciones.sin_sonidos_estado,
+    )
+    cancelador_eco = (
+        CanceladorEco(opciones.retardo_eco)
+        if opciones.interrumpir_con_voz
+        else None
     )
 
     escucha_activacion = None
@@ -471,8 +483,11 @@ async def conversar(opciones: Any) -> None:
             cola_texto: asyncio.Queue[str | None] = asyncio.Queue()
             control_interrupcion = ControlInterrupcion()
             detener_audio = control_interrupcion
-            terminar_escucha = Event()
-            hablando = Event()
+            detector_eco = (
+                DetectorInterrupcionEco(cancelador_eco)
+                if opciones.interrumpir_con_voz
+                else None
+            )
             bucle = asyncio.get_running_loop()
             generado = ""
             posicion = 0
@@ -483,19 +498,9 @@ async def conversar(opciones: Any) -> None:
             async def interrumpir():
                 await websocket.send(json.dumps({"type": "cancel"}))
 
-            tarea_interrupcion = None
-            if opciones.interrumpir_con_voz:
-                tarea_interrupcion = asyncio.create_task(asyncio.to_thread(
-                    escuchar_interrupcion,
-                    opciones.microfono,
-                    terminar_escucha,
-                    hablando,
-                    control_interrupcion,
-                    lambda: asyncio.run_coroutine_threadsafe(
-                        interrumpir(),
-                        bucle,
-                    ),
-                ))
+            def avisar_interrupcion() -> None:
+                asyncio.run_coroutine_threadsafe(interrumpir(), bucle)
+
             segmentador = SegmentadorTexto()
             tarea_voz = asyncio.create_task(
                 reproducir_cola_streaming(
@@ -507,10 +512,10 @@ async def conversar(opciones: Any) -> None:
                     inicio_respuesta,
                     detener=detener_audio,
                     confirmar=confirmar,
-                    al_empezar=lambda: (
-                        hablando.set(),
-                        indicador.cambiar(EstadoVoz.HABLANDO),
-                    ),
+                    al_empezar=lambda: indicador.cambiar(EstadoVoz.HABLANDO),
+                    microfono=opciones.microfono,
+                    detector_eco=detector_eco,
+                    al_detectar=avisar_interrupcion,
                 )
             )
 
@@ -540,11 +545,8 @@ async def conversar(opciones: Any) -> None:
                 )
             except BaseException as error:
                 control_interrupcion.evento.set()
-                terminar_escucha.set()
                 await cola_texto.put(None)
                 resultado_voz = await tarea_voz
-                if tarea_interrupcion:
-                    await tarea_interrupcion
                 if isinstance(error, InterruptedError):
                     ventana_seguimiento.cerrar()
                     latencia = control_interrupcion.latencia_segundos
@@ -570,15 +572,21 @@ async def conversar(opciones: Any) -> None:
                     await cola_texto.put((texto_hablado, len(generado)))
             await cola_texto.put(None)
             resultado_voz = await tarea_voz
-            terminar_escucha.set()
-            if tarea_interrupcion:
-                await tarea_interrupcion
             if detener_audio.is_set():
                 # done puede llegar antes de que termine el audio: consumir la confirmación de cancelación.
                 while json.loads(await websocket.recv()).get("type") != "cancelled":
                     pass
                 ventana_seguimiento.cerrar()
-                print("\nRespuesta detenida. Pulsa Enter para la siguiente frase.")
+                latencia = control_interrupcion.latencia_segundos
+                detalle = (
+                    f" en {latencia * 1000:.0f} ms"
+                    if latencia is not None
+                    else ""
+                )
+                print(
+                    "\nRespuesta detenida"
+                    f"{detalle}. Di «Astro» para volver a hablar."
+                )
                 indicador.cambiar(EstadoVoz.DORMIDO)
                 continue
             await websocket.send(json.dumps({"type": "played", "characters": len(generado)}))

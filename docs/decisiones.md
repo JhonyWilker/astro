@@ -267,3 +267,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Escuchar con Silero VAD únicamente mientras ASTRO habla, exigir tres bloques de 32 ms y cortar el flujo de salida local en bloques de 20 ms. Enviar después `cancel` al núcleo y conservar como oído solo cada fragmento completado.
 - Motivo: El corte audible debe ser inmediato e independiente de la latencia de red. Confirmar únicamente fragmentos completos evita guardar como escuchado contenido que quizá no llegó a oírse entero.
 - Consecuencia: La prueba real cortó en 96 ms y el historial guardó solo «Claro, Jhony.». Hasta la cancelación de eco de la fase 34, la función sigue siendo opcional y requiere auriculares. Cancelar no revierte herramientas ya ejecutadas.
+
+## 2026-09-29 · Cancelación de eco local con flujo dúplex
+
+- Contexto: Escuchar el micrófono y reproducir la voz mediante flujos separados desalineaba la referencia acústica. ASTRO acababa confundiendo el eco de sus altavoces con la voz de Jhony.
+- Decisión: Capturar y reproducir mediante un único flujo PortAudio dúplex a 16 kHz, en bloques de 10 ms. Cada bloque reproducido se entrega directamente a WebRTC AEC3 como referencia y solo la señal limpia pasa a Silero VAD. La integración nativa queda aislada detrás de código propio.
+- Motivo: La cancelación necesita conocer exactamente qué audio salía cuando se capturó cada bloque. Subir el umbral del detector no corrige un desfase temporal.
+- Consecuencia: ASTRO puede escuchar mientras habla usando altavoces, sin enviar audio fuera del equipo. La prueba real no produjo autoactivaciones y conservó una interrupción de 216 ms. Un cambio importante de micrófono, altavoz o disposición física deberá probarse otra vez.

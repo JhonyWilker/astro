@@ -1,4 +1,4 @@
-"""Detección y medición de interrupción, todavía para uso con auriculares."""
+"""Detección y medición de interrupción sobre audio sin eco."""
 
 from dataclasses import dataclass, field
 from threading import Event, Lock
@@ -7,8 +7,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from clients.grabar_audio import cargar_sounddevice
-from voice.vad_silero import FRECUENCIA_HZ, MUESTRAS_BLOQUE, VadSilero
+from voice.vad_silero import MUESTRAS_BLOQUE, VadSilero
 
 
 @dataclass
@@ -44,49 +43,43 @@ class ControlInterrupcion:
         return max(0.0, self.detenida_en - self.detectada_en)
 
 
-def escuchar_interrupcion(
-    dispositivo: int | None,
-    terminar: Event,
-    hablando: Event,
-    control: ControlInterrupcion,
-    al_detectar: Callable[[], Any],
-    *,
-    vad: Any | None = None,
-    modulo_audio: Any | None = None,
-    umbral: float = 0.55,
-    bloques_consecutivos: int = 3,
-) -> None:
-    if not 0 < umbral < 1:
-        raise ValueError("El umbral de interrupción debe estar entre 0 y 1")
-    if bloques_consecutivos < 1:
-        raise ValueError("Hace falta al menos un bloque de voz")
+class DetectorInterrupcionEco:
+    """Confirma voz humana después de retirar el audio de ASTRO."""
 
-    audio = modulo_audio or cargar_sounddevice()
-    detector = vad or VadSilero()
-    consecutivos = 0
-    estaba_hablando = False
-    with audio.RawInputStream(
-        samplerate=FRECUENCIA_HZ,
-        device=dispositivo,
-        channels=1,
-        dtype="int16",
-    ) as flujo:
-        while not terminar.is_set() and not control.is_set():
-            datos, _ = flujo.read(MUESTRAS_BLOQUE)
-            if not hablando.is_set():
-                if estaba_hablando:
-                    detector.reiniciar()
-                estaba_hablando = False
-                consecutivos = 0
-                continue
+    def __init__(
+        self,
+        cancelador: Any,
+        *,
+        vad: Any | None = None,
+        umbral: float = 0.70,
+        bloques_consecutivos: int = 3,
+    ) -> None:
+        if not 0 < umbral < 1:
+            raise ValueError("El umbral de interrupción debe estar entre 0 y 1")
+        if bloques_consecutivos < 1:
+            raise ValueError("Hace falta al menos un bloque de voz")
+        self.cancelador = cancelador
+        self.vad = vad or VadSilero()
+        self.umbral = umbral
+        self.bloques_consecutivos = bloques_consecutivos
+        self._pendientes = np.empty(0, dtype=np.int16)
+        self._consecutivos = 0
 
-            estaba_hablando = True
-            bloque = np.frombuffer(bytes(datos), dtype=np.int16)
-            if detector.probabilidad(bloque) >= umbral:
-                consecutivos += 1
+    def preparar_fragmento(self) -> None:
+        self._pendientes = np.empty(0, dtype=np.int16)
+        self._consecutivos = 0
+        self.vad.reiniciar()
+
+    def procesar(self, microfono: np.ndarray, referencia: np.ndarray) -> bool:
+        limpio = self.cancelador.procesar(microfono, referencia)
+        self._pendientes = np.concatenate((self._pendientes, limpio))
+        while len(self._pendientes) >= MUESTRAS_BLOQUE:
+            bloque = self._pendientes[:MUESTRAS_BLOQUE]
+            self._pendientes = self._pendientes[MUESTRAS_BLOQUE:]
+            if self.vad.probabilidad(bloque) >= self.umbral:
+                self._consecutivos += 1
             else:
-                consecutivos = 0
-            if consecutivos >= bloques_consecutivos:
-                if control.detectar():
-                    al_detectar()
-                return
+                self._consecutivos = 0
+            if self._consecutivos >= self.bloques_consecutivos:
+                return True
+        return False

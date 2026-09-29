@@ -314,3 +314,11 @@ Formato:
 - Decidido: Mantener la interrupción bajo `--interrumpir-con-voz` y exigir auriculares hasta implementar cancelación de eco. El historial solo confirma fragmentos reproducidos por completo y las herramientas ya ejecutadas no se deshacen.
 - Criterio de salida: Jhony interrumpió una explicación larga hablando encima de ASTRO. La voz se detuvo en 96 ms, el cliente volvió a dormido y el historial remoto conservó únicamente «Claro, Jhony.» en lugar del texto generado después.
 - Siguiente: fase 34 — cancelación de eco.
+
+## 2026-09-29 · Fase 34 — Cancelación de eco
+
+- Hecho: Se añadió cancelación de eco local mediante WebRTC AEC3, aislada detrás de `voice/eco.py`. La reproducción y el micrófono funcionan ahora en un único flujo dúplex de bloques alineados de 10 ms; Silero VAD analiza únicamente la señal resultante después de retirar la voz de ASTRO. Pasaron 174 pruebas automáticas. En la prueba física, ASTRO terminó una explicación larga por los altavoces sin cortarse solo y, después, distinguió la voz de Jhony mientras hablaba y detuvo la respuesta en 216 ms.
+- Falló: El primer diseño transportaba la referencia del altavoz mediante una cola entre dos flujos de audio independientes. Los relojes del micrófono y el altavoz se desalineaban y ASTRO terminaba oyéndose a sí mismo. Aumentar el umbral solo retrasó la autoactivación. Se sustituyó esa arquitectura por un único callback dúplex. Windows también denegó inicialmente el acceso físico al audio desde el entorno aislado; la prueba funcionó al autorizar el acceso local.
+- Decidido: La cancelación de eco se ejecuta completamente en el equipo local y ningún audio sale del dispositivo. `pywebrtc-audio` queda detrás de una interfaz propia para poder sustituirlo sin cambiar el cliente. La interrupción por voz conserva AEC3, tres bloques consecutivos de Silero y un retardo predeterminado de 0 ms. Cancelar sigue sin revertir herramientas ya ejecutadas.
+- Criterio de salida: ASTRO reprodujo trece fragmentos mediante los altavoces sin ninguna autoactivación. En una segunda respuesta, Jhony habló encima y ASTRO se detuvo en 216 ms, por debajo del límite de 500 ms.
+- Siguiente: fase 35 — voz propia de ASTRO con ElevenLabs y respaldo automático en Piper.

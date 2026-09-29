@@ -6,6 +6,8 @@ from time import perf_counter
 from typing import Any
 import wave
 
+import numpy as np
+
 
 RAIZ_PROYECTO = Path(__file__).resolve().parents[1]
 RUTA_VOZ = (
@@ -131,6 +133,9 @@ def reproducir_wav(
     dispositivo: int | None = None,
     modulo_audio: Any | None = None,
     detener: Any | None = None,
+    microfono: int | None = None,
+    detector_eco: Any | None = None,
+    al_detectar: Callable[[], Any] | None = None,
 ) -> bool:
     with wave.open(str(ruta), "rb") as archivo:
         if archivo.getsampwidth() != 2:
@@ -140,6 +145,38 @@ def reproducir_wav(
         datos = archivo.readframes(archivo.getnframes())
 
     audio = modulo_audio or cargar_sounddevice()
+    if detector_eco is not None:
+        if canales != 1:
+            raise ValueError("La cancelación de eco requiere audio mono")
+        if detener is None or al_detectar is None:
+            raise ValueError("La reproducción dúplex necesita control de interrupción")
+        from math import gcd
+        from scipy.signal import resample_poly
+        from voice.eco import FRECUENCIA_ECO_HZ, MUESTRAS_ECO
+        from voice.duplex import reproducir_duplex
+
+        muestras = np.frombuffer(datos, dtype=np.int16)
+        divisor = gcd(frecuencia_hz, FRECUENCIA_ECO_HZ)
+        remuestreadas = resample_poly(
+            muestras.astype(np.float32),
+            FRECUENCIA_ECO_HZ // divisor,
+            frecuencia_hz // divisor,
+        )
+        muestras = np.clip(
+            np.rint(remuestreadas),
+            -32768,
+            32767,
+        ).astype(np.int16)
+        return reproducir_duplex(
+            muestras,
+            microfono,
+            dispositivo,
+            detector_eco,
+            detener,
+            al_detectar,
+            modulo_audio=audio,
+        )
+
     with audio.RawOutputStream(
         samplerate=frecuencia_hz,
         device=dispositivo,
@@ -150,7 +187,10 @@ def reproducir_wav(
             desbordado = flujo.write(datos)
         else:
             desbordado = False
-            tamano = max(2 * canales, int(frecuencia_hz * 0.02) * 2 * canales)
+            tamano = max(
+                2 * canales,
+                int(frecuencia_hz * 0.02) * 2 * canales,
+            )
             for inicio in range(0, len(datos), tamano):
                 if detener.is_set():
                     flujo.abort()
@@ -158,7 +198,8 @@ def reproducir_wav(
                     if registrar is not None:
                         registrar()
                     break
-                desbordado |= flujo.write(datos[inicio:inicio + tamano])
+                bloque = datos[inicio:inicio + tamano]
+                desbordado |= flujo.write(bloque)
     return bool(desbordado)
 
 

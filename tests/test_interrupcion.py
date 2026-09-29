@@ -1,101 +1,66 @@
 from collections import deque
-from threading import Event
 
 import numpy as np
 import pytest
 
-from voice.interrupcion import ControlInterrupcion, escuchar_interrupcion
+from voice.eco import MUESTRAS_ECO
+from voice.interrupcion import ControlInterrupcion, DetectorInterrupcionEco
 from voice.vad_silero import MUESTRAS_BLOQUE
+
+
+class CanceladorFalso:
+    def __init__(self, valor=7):
+        self.valor = valor
+        self.llamadas = []
+
+    def procesar(self, microfono, referencia):
+        self.llamadas.append((microfono.copy(), referencia.copy()))
+        return np.full(MUESTRAS_ECO, self.valor, dtype=np.int16)
 
 
 class VadFalso:
     def __init__(self, probabilidades):
         self.probabilidades = iter(probabilidades)
+        self.bloques = []
         self.reinicios = 0
 
     def probabilidad(self, bloque):
         assert bloque.shape == (MUESTRAS_BLOQUE,)
+        self.bloques.append(bloque.copy())
         return next(self.probabilidades)
 
     def reiniciar(self):
         self.reinicios += 1
 
 
-class FlujoFalso:
-    def __init__(self, al_leer=None):
-        self.al_leer = al_leer
+def test_detector_confirma_tres_bloques_limpios_consecutivos() -> None:
+    cancelador = CanceladorFalso()
+    vad = VadFalso([0.8, 0.2, 0.9, 0.9, 0.9])
+    detector = DetectorInterrupcionEco(cancelador, vad=vad)
+    detectado = False
 
-    def __enter__(self):
-        return self
+    for _ in range(16):
+        detectado = detector.procesar(
+            np.zeros(MUESTRAS_ECO, dtype=np.int16),
+            np.ones(MUESTRAS_ECO, dtype=np.int16),
+        )
+        if detectado:
+            break
 
-    def __exit__(self, *args):
-        return False
-
-    def read(self, muestras):
-        assert muestras == MUESTRAS_BLOQUE
-        if self.al_leer:
-            self.al_leer()
-        return np.zeros(muestras, dtype=np.int16).tobytes(), False
-
-
-class AudioFalso:
-    def __init__(self, flujo):
-        self.flujo = flujo
-        self.argumentos = None
-
-    def RawInputStream(self, **argumentos):
-        self.argumentos = argumentos
-        return self.flujo
+    assert detectado is True
+    assert len(cancelador.llamadas) == 16
+    assert len(vad.bloques) == 5
 
 
-def test_interrupcion_exige_tres_bloques_de_voz_consecutivos() -> None:
-    hablando = Event()
-    hablando.set()
-    control = ControlInterrupcion()
-    detectadas = []
-    audio = AudioFalso(FlujoFalso())
+def test_detector_reinicia_solo_el_turno_no_el_cancelador() -> None:
+    cancelador = CanceladorFalso()
+    vad = VadFalso([0.9])
+    detector = DetectorInterrupcionEco(cancelador, vad=vad)
 
-    escuchar_interrupcion(
-        2,
-        Event(),
-        hablando,
-        control,
-        lambda: detectadas.append(True),
-        vad=VadFalso([0.8, 0.2, 0.9, 0.9, 0.9]),
-        modulo_audio=audio,
-    )
+    detector.preparar_fragmento()
 
-    assert detectadas == [True]
-    assert control.is_set()
-    assert audio.argumentos["samplerate"] == 16000
-    assert audio.argumentos["device"] == 2
-
-
-def test_interrupcion_ignora_voz_antes_de_que_astro_hable() -> None:
-    hablando = Event()
-    lecturas = 0
-
-    def al_leer():
-        nonlocal lecturas
-        lecturas += 1
-        if lecturas == 2:
-            hablando.set()
-
-    control = ControlInterrupcion()
-    vad = VadFalso([0.9, 0.9, 0.9])
-
-    escuchar_interrupcion(
-        None,
-        Event(),
-        hablando,
-        control,
-        lambda: None,
-        vad=vad,
-        modulo_audio=AudioFalso(FlujoFalso(al_leer)),
-    )
-
-    assert lecturas == 4
-    assert control.is_set()
+    assert vad.reinicios == 1
+    assert not hasattr(cancelador, "reiniciar")
 
 
 def test_control_mide_desde_deteccion_hasta_detencion() -> None:

@@ -145,6 +145,7 @@ def test_seguimiento_predeterminado_ofrece_cinco_turnos_y_ocho_segundos() -> Non
 
     assert opciones.turnos_seguimiento == 5
     assert opciones.espera_seguimiento == pytest.approx(8.0)
+    assert opciones.retardo_eco == 0
 
 
 def test_activacion_confirmada_no_necesita_clasificacion() -> None:
