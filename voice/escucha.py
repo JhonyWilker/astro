@@ -45,6 +45,12 @@ class ResultadoEscucha:
     desbordamientos: int
 
 
+@dataclass(frozen=True)
+class ResultadoFrase:
+    informe: InformeAudio
+    desbordamientos: int
+
+
 def validar_configuracion(configuracion: ConfiguracionFrase) -> None:
     if not 0.1 <= configuracion.espera_maxima <= 60:
         raise ValueError("La espera máxima debe estar entre 0,1 y 60 segundos")
@@ -106,6 +112,34 @@ class EscuchaContinua:
             activacion=activacion,
             informe=analizar_wav(salida),
             desbordamientos=desbordamientos + desbordados_frase,
+        )
+
+    def esperar_seguimiento(
+        self,
+        salida: Path,
+        configuracion: ConfiguracionFrase,
+        cancelar: Event | None = None,
+    ) -> ResultadoFrase:
+        """Captura una frase nueva sin exigir otra palabra de activación."""
+        validar_configuracion(configuracion)
+        self._vad.reiniciar()
+
+        with self._audio.RawInputStream(
+            samplerate=FRECUENCIA_HZ,
+            device=self._dispositivo,
+            channels=CANALES,
+            dtype=FORMATO_MUESTRA,
+        ) as flujo:
+            pcm, desbordamientos = self._capturar_frase(
+                flujo,
+                configuracion,
+                cancelar,
+            )
+
+        guardar_wav(salida, pcm, FRECUENCIA_HZ)
+        return ResultadoFrase(
+            informe=analizar_wav(salida),
+            desbordamientos=desbordamientos,
         )
 
     def _esperar_activacion(

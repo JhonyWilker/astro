@@ -86,3 +86,17 @@ Las señales usan el mismo dispositivo indicado por `--altavoz`. Para conservar 
 ```
 
 El VPS solo envía el estado y el nombre de la herramienta. Los sonidos se generan localmente y ningún evento contiene argumentos ni resultados de herramientas.
+
+## Conversación continua (fase 31)
+
+Después de decir «Astro» y completar la primera pregunta, el cliente abre automáticamente una ventana de seguimiento. Se pueden hacer cinco intervenciones adicionales sin repetir la palabra de activación. Cada ventana espera ocho segundos para que comience la voz.
+
+La pantalla muestra cuántos seguimientos quedan. Una frase que Whisper no pueda transcribir no consume el contador y permite reintentar. El silencio, una cancelación o el quinto seguimiento devuelven ASTRO a `DORMIDO`.
+
+Los valores se pueden ajustar sin cambiar código:
+
+```powershell
+.\.venv\Scripts\python.exe -m clients.voz --activacion --microfono 1 --turnos-seguimiento 5 --espera-seguimiento 8
+```
+
+La ventana reutiliza la misma conexión y el mismo historial; no crea una conversación nueva.

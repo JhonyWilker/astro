@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from clients.voz import limpiar_para_voz, recibir_respuesta
+from clients.voz import crear_argumentos, limpiar_para_voz, recibir_respuesta
 
 
 class WebSocketFalso:
@@ -110,3 +110,10 @@ def test_limpiar_para_voz_elimina_markdown_basico() -> None:
     )
 
     assert texto == "Resultado: visita ASTRO."
+
+
+def test_seguimiento_predeterminado_ofrece_cinco_turnos_y_ocho_segundos() -> None:
+    opciones = crear_argumentos().parse_args([])
+
+    assert opciones.turnos_seguimiento == 5
+    assert opciones.espera_seguimiento == pytest.approx(8.0)

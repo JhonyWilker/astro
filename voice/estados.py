@@ -46,9 +46,10 @@ TRANSICIONES = {
     EstadoVoz.PENSANDO: {
         EstadoVoz.EJECUTANDO,
         EstadoVoz.HABLANDO,
+        EstadoVoz.ESCUCHANDO,
     },
     EstadoVoz.EJECUTANDO: {EstadoVoz.PENSANDO},
-    EstadoVoz.HABLANDO: set(),
+    EstadoVoz.HABLANDO: {EstadoVoz.ESCUCHANDO},
 }
 
 

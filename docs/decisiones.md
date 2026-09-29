@@ -247,3 +247,9 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Contexto: El cliente podía imprimir mensajes aproximados, pero no conocía cuándo el núcleo ejecutaba realmente una herramienta. Los cinco estados de la fase 30 necesitaban una fuente fiable y no una animación basada en tiempos.
 - Decisión: Mantener la máquina de estados y sus señales sonoras en el nodo de voz. El núcleo emite por WebSocket `executing` justo antes de invocar una herramienta y `thinking` después de obtener su resultado. El evento contiene como máximo el nombre registrado de la herramienta; nunca incluye argumentos, resultados ni contenido privado.
 - Consecuencia: El indicador refleja trabajo real y sirve de base para las fases de conversación continua e interrupción. Las señales son breves, se pueden desactivar con `--sin-sonidos-estado` y un fallo del altavoz conserva el indicador visual. Los clientes que no reconozcan el nuevo evento pueden ignorarlo sin romper el protocolo 2.
+
+## 2026-09-29 · Ventana local de seguimiento
+
+- Contexto: Exigir «Astro» delante de cada frase impide una conversación natural, pero dejar el micrófono abierto indefinidamente aumenta falsas capturas y gasto.
+- Decisión: Después de una activación, el cliente local permite cinco intervenciones adicionales y espera un máximo de ocho segundos para que comience cada una. La primera frase activada no consume ese cupo. Solo una frase transcrita consume un seguimiento; el silencio termina la ventana y una transcripción fallida permite reintentar.
+- Consecuencia: Los seis turnos comparten el mismo WebSocket y el mismo historial del núcleo sin cambios en el VPS. Tras el quinto seguimiento, una cancelación o inactividad, ASTRO vuelve a dormido. `--turnos-seguimiento` y `--espera-seguimiento` permiten ajustar los límites sin tocar código.

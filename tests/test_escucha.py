@@ -168,6 +168,40 @@ def test_limita_la_duracion_maxima(tmp_path: Path) -> None:
     assert resultado.informe.duracion_segundos == pytest.approx(1.0, abs=0.05)
 
 
+def test_captura_un_seguimiento_sin_otra_activacion(tmp_path: Path) -> None:
+    señal = np.concatenate(
+        (
+            np.full(8000, 3000, dtype=np.int16),
+            np.zeros(16000, dtype=np.int16),
+        )
+    )
+    escucha, _ = crear_escucha(señal, [])
+
+    resultado = escucha.esperar_seguimiento(
+        tmp_path / "seguimiento.wav",
+        configuracion_prueba(),
+    )
+
+    assert resultado.informe.frecuencia_hz == 16000
+    assert 0.6 <= resultado.informe.duracion_segundos <= 0.9
+    assert resultado.desbordamientos == 0
+
+
+def test_seguimiento_sin_voz_caduca_y_no_guarda_audio(
+    tmp_path: Path,
+) -> None:
+    escucha, _ = crear_escucha(np.zeros(16000, dtype=np.int16), [])
+    salida = tmp_path / "seguimiento.wav"
+
+    with pytest.raises(ValueError, match="No se detectó voz"):
+        escucha.esperar_seguimiento(
+            salida,
+            configuracion_prueba(),
+        )
+
+    assert not salida.exists()
+
+
 @pytest.mark.parametrize(
     "opciones",
     [

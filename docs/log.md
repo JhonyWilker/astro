@@ -290,3 +290,11 @@ Formato:
 - Decidido: El servidor solo transmite el estado y el nombre de la herramienta, nunca argumentos ni resultados. Los sonidos son locales, breves y opcionales; un fallo de audio no detiene la conversación.
 - Criterio de salida: Jhony vio y oyó dormido → escuchando → pensando → ejecutando `calcular` → pensando → hablando → dormido; ASTRO respondió 4 y volvió a activarse con «Astro» en turnos posteriores.
 - Siguiente: fase 31 — conversación continua sin repetir «Astro».
+
+## 2026-09-29 · Fase 31 — Conversación continua
+
+- Hecho: Tras una activación, ASTRO abre ventanas de 8 segundos y permite cinco intervenciones adicionales sin repetir su nombre. El contador solo consume frases transcritas y vuelve a dormido por inactividad o al agotarse. Pasaron 156 pruebas.
+- Falló: En la primera prueba, Whisper rechazó una frase corta y cerró el cliente; se corrigió para conservar el contador y volver a escuchar. En otra captura entró conversación ambiental después de la orden, limitación prevista para la fase 32.
+- Decidido: La frase inicial no consume los cinco seguimientos. Una transcripción fallida no consume turno; una cancelación cierra la ventana. Los límites son configurables.
+- Criterio de salida: Con una sola activación, Jhony completó cinco seguimientos sin decir «Astro», mantuvo azul → verde → verde nueve y ASTRO volvió automáticamente a dormido.
+- Siguiente: fase 32 — detectar «no es contigo».

@@ -99,6 +99,36 @@ def test_no_repite_un_estado_ni_su_sonido() -> None:
     assert sonidos == [EstadoVoz.DORMIDO]
 
 
+def test_despues_de_hablar_puede_escuchar_un_seguimiento() -> None:
+    indicador = IndicadorEstados(sonidos=False, salida=lambda _: None)
+    for estado in (
+        EstadoVoz.DORMIDO,
+        EstadoVoz.ESCUCHANDO,
+        EstadoVoz.PENSANDO,
+        EstadoVoz.HABLANDO,
+        EstadoVoz.ESCUCHANDO,
+    ):
+        indicador.cambiar(estado)
+
+    assert indicador.estado is EstadoVoz.ESCUCHANDO
+
+
+def test_si_no_entiende_un_seguimiento_puede_escuchar_de_nuevo() -> None:
+    indicador = IndicadorEstados(sonidos=False, salida=lambda _: None)
+    for estado in (
+        EstadoVoz.DORMIDO,
+        EstadoVoz.ESCUCHANDO,
+        EstadoVoz.PENSANDO,
+        EstadoVoz.HABLANDO,
+        EstadoVoz.ESCUCHANDO,
+        EstadoVoz.PENSANDO,
+        EstadoVoz.ESCUCHANDO,
+    ):
+        indicador.cambiar(estado)
+
+    assert indicador.estado is EstadoVoz.ESCUCHANDO
+
+
 def test_rechaza_una_transicion_imposible() -> None:
     indicador = IndicadorEstados(sonidos=False, salida=lambda _: None)
     indicador.cambiar(EstadoVoz.DORMIDO)

@@ -19,7 +19,11 @@ from voice.activacion import (
     configuracion_predeterminada,
     registrar_activacion,
 )
-from voice.escucha import ConfiguracionFrase, EscuchaContinua
+from voice.escucha import (
+    ConfiguracionFrase,
+    EscuchaContinua,
+    validar_configuracion as validar_configuracion_frase,
+)
 from voice.estados import EstadoVoz, IndicadorEstados
 from voice.hablar import (
     cargar_voz,
@@ -27,6 +31,7 @@ from voice.hablar import (
 )
 from voice.streaming import SegmentadorTexto, reproducir_cola_streaming
 from voice.interrupcion import escuchar_interrupcion
+from voice.seguimiento import VentanaSeguimiento
 from voice.detectar_voz import (
     ConfiguracionDeteccion,
     grabar_hasta_silencio,
@@ -145,6 +150,18 @@ def crear_argumentos() -> ArgumentParser:
     argumentos.add_argument("--modelo-activacion", type=Path)
     argumentos.add_argument("--umbral-activacion", type=float)
     argumentos.add_argument("--bloques-activacion", type=int)
+    argumentos.add_argument(
+        "--turnos-seguimiento",
+        type=int,
+        default=5,
+        help="Intervenciones adicionales sin repetir «Astro» (1-10).",
+    )
+    argumentos.add_argument(
+        "--espera-seguimiento",
+        type=float,
+        default=8.0,
+        help="Segundos para comenzar cada seguimiento (0,1-60).",
+    )
     argumentos.add_argument("--altavoz", type=int)
     argumentos.add_argument(
         "--sin-sonidos-estado",
@@ -189,6 +206,15 @@ async def conversar(opciones: Any) -> None:
         espera_maxima=opciones.espera_maxima,
         duracion_maxima=opciones.duracion_maxima,
         silencio_final=opciones.silencio_final,
+    )
+    configuracion_seguimiento = ConfiguracionFrase(
+        espera_maxima=opciones.espera_seguimiento,
+        duracion_maxima=opciones.duracion_maxima,
+        silencio_final=opciones.silencio_final,
+    )
+    validar_configuracion_frase(configuracion_seguimiento)
+    ventana_seguimiento = VentanaSeguimiento(
+        limite=opciones.turnos_seguimiento
     )
     if opciones.activacion:
         print("Cargando el detector de «Astro»...")
@@ -244,7 +270,31 @@ async def conversar(opciones: Any) -> None:
 
         indicador.cambiar(EstadoVoz.DORMIDO)
         while True:
-            if escucha_activacion is not None:
+            es_seguimiento = (
+                escucha_activacion is not None
+                and ventana_seguimiento.activa
+            )
+            if es_seguimiento:
+                cancelar = Event()
+                try:
+                    resultado_frase = await asyncio.to_thread(
+                        escucha_activacion.esperar_seguimiento,
+                        RUTA_PREGUNTA,
+                        configuracion_seguimiento,
+                        cancelar,
+                    )
+                except asyncio.CancelledError:
+                    cancelar.set()
+                    raise
+                except ValueError:
+                    ventana_seguimiento.cerrar()
+                    print("Ventana de seguimiento cerrada por inactividad.")
+                    indicador.cambiar(EstadoVoz.DORMIDO)
+                    continue
+                informe = resultado_frase.informe
+                microfono = escucha_activacion.nombre_dispositivo()
+                desbordamientos = resultado_frase.desbordamientos
+            elif escucha_activacion is not None:
                 cancelar = Event()
                 try:
                     resultado_escucha = await asyncio.to_thread(
@@ -258,9 +308,11 @@ async def conversar(opciones: Any) -> None:
                     cancelar.set()
                     raise
                 except ValueError as error:
+                    ventana_seguimiento.cerrar()
                     print(f"No se pudo obtener una frase: {error}")
                     indicador.cambiar(EstadoVoz.DORMIDO)
                     continue
+                ventana_seguimiento.abrir()
                 informe = resultado_escucha.informe
                 microfono = escucha_activacion.nombre_dispositivo()
                 desbordamientos = resultado_escucha.desbordamientos
@@ -301,11 +353,26 @@ async def conversar(opciones: Any) -> None:
                 )
             inicio_respuesta = perf_counter()
             indicador.cambiar(EstadoVoz.PENSANDO, "Transcribiendo")
-            transcripcion = await asyncio.to_thread(
-                transcribir_audio,
-                RUTA_PREGUNTA,
-                modelo,
-            )
+            try:
+                transcripcion = await asyncio.to_thread(
+                    transcribir_audio,
+                    RUTA_PREGUNTA,
+                    modelo,
+                )
+            except ValueError as error:
+                print(f"No se pudo transcribir la frase: {error}")
+                if es_seguimiento:
+                    indicador.cambiar(
+                        EstadoVoz.ESCUCHANDO,
+                        "No te entendí · inténtalo otra vez · quedan "
+                        f"{ventana_seguimiento.restantes}",
+                    )
+                else:
+                    ventana_seguimiento.cerrar()
+                    indicador.cambiar(EstadoVoz.DORMIDO)
+                continue
+            if es_seguimiento:
+                ventana_seguimiento.consumir()
             tiempo_transcripcion = perf_counter() - inicio_respuesta
             tiempo_primer_texto: float | None = None
             tiempo_primer_fragmento: float | None = None
@@ -381,6 +448,7 @@ async def conversar(opciones: Any) -> None:
                 if tarea_interrupcion:
                     await tarea_interrupcion
                 if isinstance(error, InterruptedError):
+                    ventana_seguimiento.cerrar()
                     print("\nRespuesta detenida. Pulsa Enter para la siguiente frase.")
                     indicador.cambiar(EstadoVoz.DORMIDO)
                     continue
@@ -400,6 +468,7 @@ async def conversar(opciones: Any) -> None:
                 # done puede llegar antes de que termine el audio: consumir la confirmación de cancelación.
                 while json.loads(await websocket.recv()).get("type") != "cancelled":
                     pass
+                ventana_seguimiento.cerrar()
                 print("\nRespuesta detenida. Pulsa Enter para la siguiente frase.")
                 indicador.cambiar(EstadoVoz.DORMIDO)
                 continue
@@ -432,7 +501,14 @@ async def conversar(opciones: Any) -> None:
                     "Aviso: pudo producirse un corte en "
                     f"{resultado_voz.cortes_reproduccion} fragmento(s)."
                 )
-            indicador.cambiar(EstadoVoz.DORMIDO)
+            if escucha_activacion is not None and ventana_seguimiento.activa:
+                indicador.cambiar(
+                    EstadoVoz.ESCUCHANDO,
+                    "Puedes continuar · quedan "
+                    f"{ventana_seguimiento.restantes}",
+                )
+            else:
+                indicador.cambiar(EstadoVoz.DORMIDO)
 
 
 def main() -> int:
