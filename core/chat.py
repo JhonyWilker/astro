@@ -49,6 +49,7 @@ RUTA_PERSONALIDAD_RESTRINGIDA = (
 )
 
 EmitirTexto = Callable[[str], None]
+EmitirProgreso = Callable[[str, str | None], None]
 
 
 @dataclass(frozen=True)
@@ -587,6 +588,7 @@ def responder_con_rutas(
     al_fallar: Callable[[str, Exception], None] | None = None,
     al_funcionar: Callable[[str], tuple[str, str] | None] | None = None,
     herramientas_por_turno: tuple[tuple[str, ...], ...] = (),
+    emitir_progreso: EmitirProgreso | None = None,
     control: ControlTurno | None = None,
 ) -> ResultadoRespuesta:
     if not rutas:
@@ -745,6 +747,8 @@ def responder_con_rutas(
         try:
             if control:
                 control.comprobar()
+            if emitir_progreso is not None:
+                emitir_progreso("executing", llamada.name)
             resultado_herramienta = registro.ejecutar(
                 llamada.name,
                 argumentos,
@@ -756,6 +760,8 @@ def responder_con_rutas(
         herramientas_usadas.append(llamada.name)
         if control:
             control.herramientas.append(llamada.name)
+        if emitir_progreso is not None:
+            emitir_progreso("thinking", None)
 
         entrada_actual.extend(respuesta.output)
         entrada_actual.append(

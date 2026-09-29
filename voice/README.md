@@ -60,3 +60,29 @@ Todo se hace en local. Los datos, los modelos y las grabaciones viven en `data/w
 4. `python -m voice.entrenar_activacion`: prepara los datos (ruido, reverberación, fondo de habla), entrena con minado de negativas difíciles y guarda `data/models/wakeword/astro_v1.npz` junto con los ajustes recomendados.
 
 Si se cambia de micrófono, conviene volver a grabar las muestras.
+
+## Estados de la conversación (fase 30)
+
+El cliente de voz muestra y reproduce una señal breve para cada estado:
+
+| Estado | Significado |
+| --- | --- |
+| `DORMIDO` | Espera la palabra «Astro» |
+| `ESCUCHANDO` | Ha despertado y está capturando la frase |
+| `PENSANDO` | Transcribe o espera la respuesta del núcleo |
+| `EJECUTANDO` | El núcleo está usando la herramienta mostrada |
+| `HABLANDO` | Va a comenzar la reproducción de la respuesta |
+
+La secuencia completa se usa automáticamente con:
+
+```powershell
+.\.venv\Scripts\python.exe -m clients.voz --activacion --microfono 1
+```
+
+Las señales usan el mismo dispositivo indicado por `--altavoz`. Para conservar solo el indicador visual:
+
+```powershell
+.\.venv\Scripts\python.exe -m clients.voz --activacion --microfono 1 --sin-sonidos-estado
+```
+
+El VPS solo envía el estado y el nombre de la herramienta. Los sonidos se generan localmente y ningún evento contiene argumentos ni resultados de herramientas.

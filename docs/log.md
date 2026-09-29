@@ -282,3 +282,11 @@ Formato:
 - Criterio de salida: Jhony comprobó que ASTRO se activa con «Astro», sin «hey» (más de 20 activaciones con el modelo anterior y «todo salió perfecto» con el final), que una hora con ruido de fondo no produjo ninguna activación falsa y que la conversación de extremo a extremo con el VPS (`python -m clients.voz --activacion --microfono 1`) funciona. Con las palabras parecidas dichas unas 30 veces saltó 7: queda como limitación conocida, poco relevante en uso normal.
 - Mejoras futuras: si las palabras parecidas molestan, confirmar «Astro» con la transcripción de Whisper (exige guardar el último segundo anterior a la activación); grabar más muestras de Jhony si baja el reconocimiento o cambia el micrófono; subir el volumen de entrada del micrófono en Windows.
 - Siguiente: fase 30 — Estados: dormido, escuchando, pensando, ejecutando, hablando.
+
+## 2026-09-29 · Fase 30 — Estados de voz visibles y sonoros
+
+- Hecho: Se creó una máquina de cinco estados con señales locales, se añadieron eventos WebSocket reales para las herramientas y se corrigió la pérdida del wake word después del primer turno. El VPS se desplegó con copia de seguridad y quedó saludable. Pasaron 144 pruebas.
+- Falló: Las dos primeras frases largas fueron mal transcritas por Whisper y no activaron una herramienta. La prueba corta «2 más 2» sí recorrió todos los estados. Dos pruebas antiguas de cancelación detectaron una incompatibilidad de firma, corregida conservando `ControlTurno` como último argumento.
+- Decidido: El servidor solo transmite el estado y el nombre de la herramienta, nunca argumentos ni resultados. Los sonidos son locales, breves y opcionales; un fallo de audio no detiene la conversación.
+- Criterio de salida: Jhony vio y oyó dormido → escuchando → pensando → ejecutando `calcular` → pensando → hablando → dormido; ASTRO respondió 4 y volvió a activarse con «Astro» en turnos posteriores.
+- Siguiente: fase 31 — conversación continua sin repetir «Astro».

@@ -27,8 +27,18 @@ class SesionFalsa:
     def cantidad_turnos(self) -> int:
         return len(self.preguntas)
 
-    def preguntar(self, pregunta: str, emitir_texto, emitir_cambio=None, control=None):
+    def preguntar(
+        self,
+        pregunta: str,
+        emitir_texto,
+        emitir_cambio=None,
+        control=None,
+        emitir_progreso=None,
+    ):
         self.preguntas.append(pregunta)
+        if pregunta == "Calcula":
+            emitir_progreso("executing", "calcular")
+            emitir_progreso("thinking", None)
         emitir_texto("Hola, ")
         emitir_texto("Jhony.")
         registro = SimpleNamespace(
@@ -51,9 +61,16 @@ class SesionFalsa:
         emitir_texto,
         emitir_cambio=None,
         control=None,
+        emitir_progreso=None,
     ):
         self.ediciones.append((indice, pregunta))
-        return self.preguntar(pregunta, emitir_texto, emitir_cambio)
+        return self.preguntar(
+            pregunta,
+            emitir_texto,
+            emitir_cambio,
+            control,
+            emitir_progreso,
+        )
 
 
 class NucleoFalso:
@@ -297,6 +314,24 @@ def test_websocket_transmite_respuesta() -> None:
         }
     ]
     assert nucleo.sesion.preguntas == ["Salúdame"]
+
+
+def test_websocket_transmite_el_estado_real_de_una_herramienta() -> None:
+    nucleo = NucleoFalso()
+    with TestClient(crear_app(nucleo)) as cliente:
+        with cliente.websocket_connect("/ws") as websocket:
+            assert websocket.receive_json()["type"] == "ready"
+            websocket.send_json({"type": "message", "text": "Calcula"})
+
+            assert websocket.receive_json() == {
+                "type": "state",
+                "state": "executing",
+                "tool": "calcular",
+            }
+            assert websocket.receive_json() == {
+                "type": "state",
+                "state": "thinking",
+            }
 
 
 def test_websocket_edita_y_rebobina_antes_de_responder() -> None:

@@ -88,6 +88,7 @@ async def reproducir_cola_streaming(
     reloj: Callable[[], float] = perf_counter,
     detener: Any | None = None,
     confirmar: Any | None = None,
+    al_empezar: Callable[[], None] | None = None,
 ) -> ResultadoStreaming:
     cola_audio: asyncio.Queue[Path | None] = asyncio.Queue()
 
@@ -132,6 +133,8 @@ async def reproducir_cola_streaming(
                 continue
             if latencia is None:
                 latencia = reloj() - inicio
+                if al_empezar is not None:
+                    al_empezar()
             opciones = {"detener": detener} if detener is not None else {}
             desbordado = await asyncio.to_thread(reproductor, ruta, dispositivo, **opciones)
             if detener is not None and detener.is_set():

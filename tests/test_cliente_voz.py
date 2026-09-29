@@ -58,6 +58,43 @@ def test_recibir_respuesta_reune_streaming_y_uso() -> None:
     assert respuesta.coste_usd == pytest.approx(0.0012)
 
 
+def test_recibir_respuesta_publica_estados_de_herramienta() -> None:
+    websocket = WebSocketFalso(
+        [
+            {"type": "state", "state": "executing", "tool": "calcular"},
+            {"type": "state", "state": "thinking"},
+            {"type": "delta", "text": "Resultado: 42"},
+            {"type": "done", "usage": []},
+        ]
+    )
+    estados = []
+
+    respuesta = asyncio.run(
+        recibir_respuesta(
+            websocket,
+            "Calcula 6 por 7",
+            cambiar_estado=lambda estado, herramienta: estados.append(
+                (estado, herramienta)
+            ),
+        )
+    )
+
+    assert estados == [
+        ("executing", "calcular"),
+        ("thinking", None),
+    ]
+    assert respuesta.texto == "Resultado: 42"
+
+
+def test_recibir_respuesta_rechaza_un_estado_desconocido() -> None:
+    websocket = WebSocketFalso(
+        [{"type": "state", "state": "inventado"}]
+    )
+
+    with pytest.raises(RuntimeError, match="estado desconocido"):
+        asyncio.run(recibir_respuesta(websocket, "Hola"))
+
+
 def test_recibir_respuesta_propaga_error_controlado() -> None:
     websocket = WebSocketFalso(
         [{"type": "error", "message": "Servicio no disponible"}]

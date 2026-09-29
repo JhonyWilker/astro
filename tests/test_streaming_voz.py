@@ -39,6 +39,7 @@ def test_streaming_sintetiza_y_reproduce_en_orden(
 ) -> None:
     sintetizados = []
     reproducidos = []
+    estados = []
 
     def sintetizador(texto, voz, configuracion, ruta):
         sintetizados.append((texto, ruta.name))
@@ -62,6 +63,7 @@ def test_streaming_sintetiza_y_reproduce_en_orden(
             sintetizador=sintetizador,
             reproductor=reproductor,
             reloj=lambda: 12.0,
+            al_empezar=lambda: estados.append("hablando"),
         )
 
     resultado = asyncio.run(ejecutar_prueba())
@@ -77,3 +79,4 @@ def test_streaming_sintetiza_y_reproduce_en_orden(
     assert resultado.fragmentos == 2
     assert resultado.latencia_primera_voz == pytest.approx(2.0)
     assert resultado.cortes_reproduccion == 0
+    assert estados == ["hablando"]

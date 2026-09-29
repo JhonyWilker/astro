@@ -20,6 +20,7 @@ from voice.activacion import (
     registrar_activacion,
 )
 from voice.escucha import ConfiguracionFrase, EscuchaContinua
+from voice.estados import EstadoVoz, IndicadorEstados
 from voice.hablar import (
     cargar_voz,
     crear_configuracion,
@@ -61,6 +62,7 @@ async def recibir_respuesta(
     websocket: Any,
     texto: str,
     mostrar_fragmento: Callable[[str], None] | None = None,
+    cambiar_estado: Callable[[str, str | None], None] | None = None,
 ) -> RespuestaRemota:
     await websocket.send(
         json.dumps(
@@ -79,6 +81,18 @@ async def recibir_respuesta(
             fragmentos.append(fragmento)
             if mostrar_fragmento is not None:
                 mostrar_fragmento(fragmento)
+        elif tipo == "state":
+            estado = str(evento.get("state", ""))
+            if estado not in {"thinking", "executing"}:
+                raise RuntimeError(
+                    f"ASTRO envió un estado desconocido: {estado or 'vacío'}"
+                )
+            if cambiar_estado is not None:
+                herramienta = evento.get("tool")
+                cambiar_estado(
+                    estado,
+                    str(herramienta) if herramienta is not None else None,
+                )
         elif tipo == "done":
             uso = evento.get("usage", [])
             respuesta = "".join(fragmentos).strip()
@@ -132,6 +146,11 @@ def crear_argumentos() -> ArgumentParser:
     argumentos.add_argument("--umbral-activacion", type=float)
     argumentos.add_argument("--bloques-activacion", type=int)
     argumentos.add_argument("--altavoz", type=int)
+    argumentos.add_argument(
+        "--sin-sonidos-estado",
+        action="store_true",
+        help="Mostrar los estados sin reproducir sus señales sonoras.",
+    )
     argumentos.add_argument("--interrumpir-con-voz", action="store_true",
                             help="Escuchar mientras responde; usar auriculares para evitar autoactivaciones.")
     argumentos.add_argument(
@@ -160,8 +179,12 @@ async def conversar(opciones: Any) -> None:
     print("Cargando la voz local de ASTRO...")
     voz = await asyncio.to_thread(cargar_voz)
     configuracion_voz = crear_configuracion(opciones.hablante)
+    indicador = IndicadorEstados(
+        dispositivo=opciones.altavoz,
+        sonidos=not opciones.sin_sonidos_estado,
+    )
 
-    escucha = None
+    escucha_activacion = None
     configuracion_frase = ConfiguracionFrase(
         espera_maxima=opciones.espera_maxima,
         duracion_maxima=opciones.duracion_maxima,
@@ -184,14 +207,27 @@ async def conversar(opciones: Any) -> None:
                 **cambios,
             ),
         )
-        escucha = EscuchaContinua(
+        escucha_activacion = EscuchaContinua(
             detector,
             dispositivo=opciones.microfono,
         )
 
     def mostrar_activacion(activacion: Activacion) -> None:
         registrar_activacion(activacion)
-        print(f"Activado ({activacion.puntuacion:.2f}). Te escucho...")
+        indicador.cambiar(
+            EstadoVoz.ESCUCHANDO,
+            f"Habla ahora · activación {activacion.puntuacion:.2f}",
+        )
+
+    def mostrar_estado_remoto(
+        estado: str,
+        herramienta: str | None,
+    ) -> None:
+        if estado == "executing":
+            detalle = (herramienta or "herramienta").replace("_", " ")
+            indicador.cambiar(EstadoVoz.EJECUTANDO, detalle)
+        elif estado == "thinking":
+            indicador.cambiar(EstadoVoz.PENSANDO)
 
     print(f"Conectando con ASTRO en {url}...")
     token = os.getenv("ASTRO_DEVICE_TOKEN", "")
@@ -201,18 +237,18 @@ async def conversar(opciones: Any) -> None:
             raise RuntimeError("ASTRO no confirmó la conexión")
 
         print("ASTRO conectado.")
-        if escucha is not None:
+        if escucha_activacion is not None:
             print("Di «Astro» para hablar. Pulsa Ctrl+C para terminar.")
         else:
             print("Pulsa Enter para hablar o escribe 'salir' para terminar.")
 
+        indicador.cambiar(EstadoVoz.DORMIDO)
         while True:
-            if escucha is not None:
-                print("\nDormido. Esperando «Astro»...")
+            if escucha_activacion is not None:
                 cancelar = Event()
                 try:
                     resultado_escucha = await asyncio.to_thread(
-                        escucha.esperar_frase,
+                        escucha_activacion.esperar_frase,
                         RUTA_PREGUNTA,
                         configuracion_frase,
                         cancelar,
@@ -223,9 +259,10 @@ async def conversar(opciones: Any) -> None:
                     raise
                 except ValueError as error:
                     print(f"No se pudo obtener una frase: {error}")
+                    indicador.cambiar(EstadoVoz.DORMIDO)
                     continue
                 informe = resultado_escucha.informe
-                microfono = escucha.nombre_dispositivo()
+                microfono = escucha_activacion.nombre_dispositivo()
                 desbordamientos = resultado_escucha.desbordamientos
             else:
                 orden = (
@@ -238,7 +275,7 @@ async def conversar(opciones: Any) -> None:
                     print("Pulsa solo Enter para iniciar una grabación.")
                     continue
 
-                print("Escuchando... Habla ahora.")
+                indicador.cambiar(EstadoVoz.ESCUCHANDO)
                 try:
                     informe, microfono, desbordamientos = (
                         await asyncio.to_thread(
@@ -250,6 +287,7 @@ async def conversar(opciones: Any) -> None:
                     )
                 except ValueError as error:
                     print(f"No se pudo obtener una frase: {error}")
+                    indicador.cambiar(EstadoVoz.DORMIDO)
                     continue
 
             print(
@@ -262,7 +300,7 @@ async def conversar(opciones: Any) -> None:
                     f"{desbordamientos} desbordamiento(s) de audio."
                 )
             inicio_respuesta = perf_counter()
-            print("Transcribiendo...")
+            indicador.cambiar(EstadoVoz.PENSANDO, "Transcribiendo")
             transcripcion = await asyncio.to_thread(
                 transcribir_audio,
                 RUTA_PREGUNTA,
@@ -288,9 +326,9 @@ async def conversar(opciones: Any) -> None:
                 detener_audio.set()
                 await websocket.send(json.dumps({"type": "cancel"}))
 
-            escucha = None
+            tarea_interrupcion = None
             if opciones.interrumpir_con_voz:
-                escucha = asyncio.create_task(asyncio.to_thread(
+                tarea_interrupcion = asyncio.create_task(asyncio.to_thread(
                     escuchar_interrupcion, opciones.microfono, terminar_escucha,
                     lambda: asyncio.run_coroutine_threadsafe(interrumpir(), bucle),
                 ))
@@ -305,6 +343,9 @@ async def conversar(opciones: Any) -> None:
                     inicio_respuesta,
                     detener=detener_audio,
                     confirmar=confirmar,
+                    al_empezar=lambda: indicador.cambiar(
+                        EstadoVoz.HABLANDO
+                    ),
                 )
             )
 
@@ -330,16 +371,18 @@ async def conversar(opciones: Any) -> None:
                     websocket,
                     transcripcion.texto,
                     mostrar_y_preparar,
+                    mostrar_estado_remoto,
                 )
             except BaseException as error:
                 detener_audio.set()
                 terminar_escucha.set()
                 await cola_texto.put(None)
                 await tarea_voz
-                if escucha:
-                    await escucha
+                if tarea_interrupcion:
+                    await tarea_interrupcion
                 if isinstance(error, InterruptedError):
                     print("\nRespuesta detenida. Pulsa Enter para la siguiente frase.")
+                    indicador.cambiar(EstadoVoz.DORMIDO)
                     continue
                 await websocket.send(json.dumps({"type": "played", "characters": 0}))
                 raise
@@ -351,13 +394,14 @@ async def conversar(opciones: Any) -> None:
             await cola_texto.put(None)
             resultado_voz = await tarea_voz
             terminar_escucha.set()
-            if escucha:
-                await escucha
+            if tarea_interrupcion:
+                await tarea_interrupcion
             if detener_audio.is_set():
                 # done puede llegar antes de que termine el audio: consumir la confirmación de cancelación.
                 while json.loads(await websocket.recv()).get("type") != "cancelled":
                     pass
                 print("\nRespuesta detenida. Pulsa Enter para la siguiente frase.")
+                indicador.cambiar(EstadoVoz.DORMIDO)
                 continue
             await websocket.send(json.dumps({"type": "played", "characters": len(generado)}))
             if (
@@ -388,6 +432,7 @@ async def conversar(opciones: Any) -> None:
                     "Aviso: pudo producirse un corte en "
                     f"{resultado_voz.cortes_reproduccion} fragmento(s)."
                 )
+            indicador.cambiar(EstadoVoz.DORMIDO)
 
 
 def main() -> int:

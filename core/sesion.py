@@ -6,6 +6,7 @@ from openai import APIError, OpenAI
 from core.ajustes_ia import AjustesIA, ServicioAjustesIA
 from core.chat import (
     Configuracion,
+    EmitirProgreso,
     ResultadoRespuesta,
     RutaIA,
     cargar_configuracion,
@@ -130,6 +131,7 @@ class SesionASTRO:
         emitir_texto: EmitirTexto | None = None,
         emitir_cambio: EmitirCambio | None = None,
         control: ControlTurno | None = None,
+        emitir_progreso: EmitirProgreso | None = None,
     ) -> ResultadoRespuesta:
         pregunta = pregunta.strip()
         if not pregunta:
@@ -147,6 +149,7 @@ class SesionASTRO:
                 self.nucleo.registrar_fallo,
                 self.nucleo.registrar_exito,
                 tuple(self.herramientas_por_turno),
+                emitir_progreso,
                 control,
             )
         except TurnoCancelado:
@@ -185,6 +188,7 @@ class SesionASTRO:
         emitir_texto: EmitirTexto | None = None,
         emitir_cambio: EmitirCambio | None = None,
         control: ControlTurno | None = None,
+        emitir_progreso: EmitirProgreso | None = None,
     ) -> ResultadoRespuesta:
         if type(indice) is not int or not 0 <= indice < self.cantidad_turnos:
             raise ValueError("El turno que intentas editar no existe")
@@ -199,6 +203,7 @@ class SesionASTRO:
                 emitir_texto,
                 emitir_cambio,
                 control,
+                emitir_progreso,
             )
         except Exception:
             self.historial = historial_original

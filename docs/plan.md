@@ -182,7 +182,7 @@ Objetivo: hablar con ASTRO diciendo solo "Astro", en conversación continua, con
 | 28b | ✅ Vinculación de dispositivos desde la PWA mediante QR o código de un solo uso | Un administrador añade un dispositivo sin terminal; el código caduca y no puede reutilizarse |
 | 28c | ✅ Roles y administración de dispositivos | Jhony puede asignar administrador, personal o restringido, cambiarlo y revocar el dispositivo sin exponer sus datos |
 | 29 | ✅ Wake word propio: entrenar el modelo para "Astro" | Se activa con "Astro", sin "hey"; validado con más de 20 activaciones y una hora de ruido de fondo sin falsas activaciones |
-| 30 | Estados: dormido, escuchando, pensando, ejecutando, hablando | Indicador visual y sonoro de cada estado |
+| 30 | ✅ Estados: dormido, escuchando, pensando, ejecutando, hablando | Indicador visual y sonoro de cada estado |
 | 31 | Conversación continua: ventana de seguimiento sin repetir "Astro" | 5 intercambios seguidos sin nombrarlo |
 | 32 | "No es contigo": detectar si la frase iba dirigida a ASTRO y volver a dormir | Descarta frases ajenas y registra el falso positivo |
 | 33 | Interrupción: hablar encima y que se calle | Se detiene en menos de 0,5 s |
@@ -422,7 +422,7 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **30 — Estados: dormido, escuchando, pensando, ejecutando, hablando.** Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **31 — Conversación continua: ventana de seguimiento sin repetir «Astro».** Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |

@@ -503,6 +503,7 @@ def test_respaldo_no_repite_herramienta_ejecutada(monkeypatch) -> None:
         modelo=configuracion.modelos_por_proveedor["openrouter"],
     )
     registro = RegistroContador()
+    progreso = []
     monkeypatch.setattr(chat, "guardar_registro", lambda registro: None)
 
     resultado = chat.responder_con_rutas(
@@ -516,9 +517,16 @@ def test_respaldo_no_repite_herramienta_ejecutada(monkeypatch) -> None:
         historial=[{"role": "user", "content": "Calcula 40 + 2"}],
         personalidad="Personalidad de prueba",
         registro=registro,
+        emitir_progreso=lambda estado, herramienta: progreso.append(
+            (estado, herramienta)
+        ),
     )
 
     assert registro.ejecuciones == 1
+    assert progreso == [
+        ("executing", "calcular"),
+        ("thinking", None),
+    ]
     assert resultado.proveedor_final == "openrouter"
     assert any(
         isinstance(elemento, dict)

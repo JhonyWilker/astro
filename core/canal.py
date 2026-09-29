@@ -64,14 +64,40 @@ async def atender(
             else:
                 asyncio.run_coroutine_threadsafe(enviar(evento), bucle).result(timeout=10)
 
+        def progreso(estado, herramienta=None):
+            evento = {"type": "state", "state": estado}
+            if herramienta is not None:
+                evento["tool"] = herramienta
+            if edicion:
+                eventos.append(evento)
+            else:
+                asyncio.run_coroutine_threadsafe(
+                    enviar(evento), bucle
+                ).result(timeout=10)
+
         try:
             if edicion:
-                resultado = await asyncio.to_thread(sesion.editar_turno, indice, texto, emitir, cambio, ctl)
+                resultado = await asyncio.to_thread(
+                    sesion.editar_turno,
+                    indice,
+                    texto,
+                    emitir,
+                    cambio,
+                    ctl,
+                    progreso,
+                )
                 await enviar({"type": "rewind", "turn": indice, "text": texto})
                 for evento in eventos:
                     await enviar(evento)
             else:
-                resultado = await asyncio.to_thread(sesion.preguntar, texto, emitir, cambio, ctl)
+                resultado = await asyncio.to_thread(
+                    sesion.preguntar,
+                    texto,
+                    emitir,
+                    cambio,
+                    ctl,
+                    progreso,
+                )
             ctl.generacion_completa = True
             await enviar({
                 "type": "done", "turn": indice,
