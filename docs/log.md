@@ -306,3 +306,11 @@ Formato:
 - Decidido: Una activación válida ya demuestra que la primera frase va dirigida a ASTRO. En seguimiento, cualquier duda se descarta de forma segura. Un fallo del clasificador hace que ASTRO calle y duerma. Nunca se registra la transcripción descartada.
 - Criterio de salida: Jhony dijo «Recuerda la palabra faro» tras activar ASTRO; una frase posterior dirigida a María fue clasificada `other_person`, no obtuvo respuesta y devolvió ASTRO a dormido. La siguiente activación conservó «faro» en el contexto, demostrando que la frase ajena no contaminó el historial.
 - Siguiente: fase 33 — interrupción: hablar encima y que se calle.
+
+## 2026-09-29 · Fase 33 — Interrupción de voz
+
+- Hecho: Se sustituyó el detector experimental por Silero VAD, activo solo durante la reproducción, con tres bloques consecutivos de 32 ms. Un control compartido corta localmente el audio en bloques de 20 ms, mide la latencia, descarta fragmentos pendientes y envía la cancelación al VPS. Se añadieron pruebas del detector, el aborto de audio, la medición y la confirmación conservadora. Pasaron 169 pruebas.
+- Falló: La primera activación de la prueba física no recibió una frase antes del límite y volvió correctamente a dormido. El segundo intento completó la medición.
+- Decidido: Mantener la interrupción bajo `--interrumpir-con-voz` y exigir auriculares hasta implementar cancelación de eco. El historial solo confirma fragmentos reproducidos por completo y las herramientas ya ejecutadas no se deshacen.
+- Criterio de salida: Jhony interrumpió una explicación larga hablando encima de ASTRO. La voz se detuvo en 96 ms, el cliente volvió a dormido y el historial remoto conservó únicamente «Claro, Jhony.» en lugar del texto generado después.
+- Siguiente: fase 34 — cancelación de eco.

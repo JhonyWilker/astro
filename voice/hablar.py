@@ -154,6 +154,9 @@ def reproducir_wav(
             for inicio in range(0, len(datos), tamano):
                 if detener.is_set():
                     flujo.abort()
+                    registrar = getattr(detener, "registrar_detencion", None)
+                    if registrar is not None:
+                        registrar()
                     break
                 desbordado |= flujo.write(datos[inicio:inicio + tamano])
     return bool(desbordado)

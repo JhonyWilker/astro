@@ -107,3 +107,13 @@ Los números de los dispositivos pueden cambiar. Usa `python -m clients.grabar_a
 ASTRO no espera a recibir todo el texto. El primer fragmento se sintetiza en cuanto termina una frase o se acumulan unos 45 caracteres; mientras ese audio se reproduce, el siguiente se prepara. La terminal muestra el tiempo desde que termina la captura hasta antes de llamar al reproductor y el número de fragmentos hablados. Esta aproximación excluye el silencio final del detector y la latencia del dispositivo; no es una medición acústica de la primera palabra.
 
 Los WAV parciales se guardan en `data/audio` y continúan excluidos de Git. El orden de la respuesta se conserva aunque síntesis y reproducción trabajen simultáneamente.
+
+## Interrumpir una respuesta hablada
+
+Hasta que la fase 34 incorpore cancelación de eco, esta función debe probarse con auriculares:
+
+```powershell
+.\.venv\Scripts\python.exe -m clients.voz --activacion --microfono 1 --interrumpir-con-voz
+```
+
+Cuando Jhony habla encima, el cliente corta el audio local, descarta los fragmentos pendientes y envía `cancel` al núcleo. El historial conserva únicamente el último fragmento reproducido por completo; una herramienta que ya terminó no se revierte. La terminal muestra en milisegundos el tiempo entre detectar la voz y detener la reproducción.

@@ -185,7 +185,7 @@ Objetivo: hablar con ASTRO diciendo solo "Astro", en conversación continua, con
 | 30 | ✅ Estados: dormido, escuchando, pensando, ejecutando, hablando | Indicador visual y sonoro de cada estado |
 | 31 | ✅ Conversación continua: ventana de seguimiento sin repetir "Astro" | 5 intercambios seguidos sin nombrarlo |
 | 32 | ✅ "No es contigo": detectar si la frase iba dirigida a ASTRO y volver a dormir | Descarta frases ajenas y registra el falso positivo |
-| 33 | Interrupción: hablar encima y que se calle | Se detiene en menos de 0,5 s |
+| 33 | ✅ Interrupción: hablar encima y que se calle | Se detiene en menos de 0,5 s |
 | 34 | Cancelación de eco: que no se oiga a sí mismo | Sin autoactivaciones con altavoz |
 | 35 | Voz propia de ASTRO: diseñarla en ElevenLabs (modelo Flash, sin clonar a ninguna persona real) y elegir plan con los datos de uso de la fase 16 | Voz configurada, con cambio automático a Piper si falla la nube |
 | 36 | Optimizar latencia | Primera palabra en menos de 2 s |
@@ -422,7 +422,7 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **33 — Interrupción: hablar encima y que se calle.** Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **34 — Cancelación de eco: que no se oiga a sí mismo.** Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |

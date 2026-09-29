@@ -8,6 +8,7 @@ from voice.hablar import (
     reproducir_wav,
     sintetizar,
 )
+from voice.interrupcion import ControlInterrupcion
 
 
 class VozFalsa:
@@ -21,8 +22,10 @@ class VozFalsa:
 
 
 class FlujoSalidaFalso:
-    def __init__(self):
+    def __init__(self, al_escribir=None):
         self.datos = b""
+        self.al_escribir = al_escribir
+        self.abortado = False
 
     def __enter__(self):
         return self
@@ -31,8 +34,13 @@ class FlujoSalidaFalso:
         return None
 
     def write(self, datos: bytes) -> bool:
-        self.datos = bytes(datos)
+        self.datos += bytes(datos)
+        if self.al_escribir:
+            self.al_escribir()
         return False
+
+    def abort(self) -> None:
+        self.abortado = True
 
 
 class AudioSalidaFalso:
@@ -98,6 +106,30 @@ def test_reproducir_wav_usa_su_formato(tmp_path: Path) -> None:
         "dtype": "int16",
     }
     assert len(audio.flujo.datos) == 4410
+
+
+def test_reproducir_wav_aborta_y_mide_una_interrupcion(tmp_path: Path) -> None:
+    salida = tmp_path / "respuesta.wav"
+    sintetizar(
+        "Hola, Jhony.",
+        VozFalsa(),
+        {"speaker_id": 0},
+        salida,
+    )
+    tiempos = iter([10.0, 10.02])
+    control = ControlInterrupcion(reloj=lambda: next(tiempos))
+    audio = AudioSalidaFalso()
+    audio.flujo = FlujoSalidaFalso(control.detectar)
+
+    reproducir_wav(
+        salida,
+        modulo_audio=audio,
+        detener=control,
+    )
+
+    assert audio.flujo.abortado is True
+    assert len(audio.flujo.datos) < 4410
+    assert control.latencia_segundos == pytest.approx(0.02)
 
 
 def test_sintetizar_rechaza_texto_vacio(tmp_path: Path) -> None:

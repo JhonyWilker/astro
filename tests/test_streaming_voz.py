@@ -7,6 +7,7 @@ from voice.streaming import (
     SegmentadorTexto,
     reproducir_cola_streaming,
 )
+from voice.interrupcion import ControlInterrupcion
 
 
 def test_segmentador_emite_frases_completas() -> None:
@@ -80,3 +81,39 @@ def test_streaming_sintetiza_y_reproduce_en_orden(
     assert resultado.latencia_primera_voz == pytest.approx(2.0)
     assert resultado.cortes_reproduccion == 0
     assert estados == ["hablando"]
+
+
+def test_streaming_interrumpido_no_confirma_fragmento(tmp_path: Path) -> None:
+    control = ControlInterrupcion()
+    confirmados = []
+
+    def reproductor(ruta, dispositivo, detener):
+        control.detectar()
+        control.registrar_detencion()
+        return False
+
+    async def confirmar(cantidad):
+        confirmados.append(cantidad)
+
+    async def ejecutar_prueba():
+        cola = asyncio.Queue()
+        await cola.put(("Una respuesta larga.", 20))
+        await cola.put(None)
+        return await reproducir_cola_streaming(
+            cola,
+            object(),
+            object(),
+            None,
+            tmp_path / "respuesta.wav",
+            inicio=0.0,
+            sintetizador=lambda *args: None,
+            reproductor=reproductor,
+            detener=control,
+            confirmar=confirmar,
+        )
+
+    resultado = asyncio.run(ejecutar_prueba())
+
+    assert resultado.fragmentos == 0
+    assert confirmados == []
+    assert control.latencia_segundos is not None

@@ -260,3 +260,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Aceptar directamente la primera frase activada y clasificar solo los seguimientos mediante salida JSON estructurada. Usar la última respuesta de ASTRO como contexto, tratar toda transcripción como dato no fiable y descartar frases ajenas, ambientales o dudosas. El descarte cierra la ventana y solo registra metadatos.
 - Motivo: Evitar respuestas a conversaciones ajenas sin rechazar órdenes legítimas cuya palabra de activación ya no forma parte del audio transcrito.
 - Consecuencia: Cada seguimiento hablado añade una petición pequeña al modelo. Ante duda o fallo, ASTRO calla y duerme; la frase no entra en el historial. La calidad depende de Whisper y se medirá con el conjunto de la fase 38.
+
+## 2026-09-29 · Interrupción local con confirmación conservadora
+
+- Contexto: Cancelar el stream remoto no basta para callar un audio que ya se está reproduciendo, y escuchar antes de que empiece la voz puede confundir ruido con una interrupción.
+- Decisión: Escuchar con Silero VAD únicamente mientras ASTRO habla, exigir tres bloques de 32 ms y cortar el flujo de salida local en bloques de 20 ms. Enviar después `cancel` al núcleo y conservar como oído solo cada fragmento completado.
+- Motivo: El corte audible debe ser inmediato e independiente de la latencia de red. Confirmar únicamente fragmentos completos evita guardar como escuchado contenido que quizá no llegó a oírse entero.
+- Consecuencia: La prueba real cortó en 96 ms y el historial guardó solo «Claro, Jhony.». Hasta la cancelación de eco de la fase 34, la función sigue siendo opcional y requiere auriculares. Cancelar no revierte herramientas ya ejecutadas.

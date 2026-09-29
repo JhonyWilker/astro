@@ -100,3 +100,15 @@ Los valores se pueden ajustar sin cambiar código:
 ```
 
 La ventana reutiliza la misma conexión y el mismo historial; no crea una conversación nueva.
+
+## Interrupción mientras ASTRO habla (fase 33)
+
+Con auriculares, el cliente puede escuchar a Jhony mientras reproduce la respuesta:
+
+```powershell
+.\.venv\Scripts\python.exe -m clients.voz --activacion --microfono 1 --interrumpir-con-voz
+```
+
+Silero VAD exige tres bloques consecutivos de voz de 32 ms y solo comienza a decidir cuando ASTRO está sonando. Al detectar voz, marca el corte local inmediatamente, el reproductor comprueba la marca cada 20 ms y el cliente cancela el turno remoto. La terminal muestra la latencia medida desde la detección hasta la detención.
+
+Hasta completar la fase 34 debe usarse con auriculares; con altavoces ASTRO todavía puede oírse a sí mismo.
