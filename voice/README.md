@@ -14,15 +14,19 @@ El modelo se ejecuta en CPU con cuantización de 8 bits. Sus archivos se guardan
 
 ## Texto a voz
 
-Para generar y escuchar una frase con la voz local de ASTRO:
+Para generar y escuchar una frase directamente con la voz local de respaldo:
 
 ```powershell
 .\.venv\Scripts\python.exe -m voice.hablar "Hola, Jhony."
 ```
 
-ASTRO usa por defecto el hablante masculino de `es_ES-sharvard-medium`. Se puede probar el femenino con `--hablante F` y generar el WAV sin reproducirlo con `--sin-reproducir`.
+El cliente conversacional usa como voz principal la voz original `ASTRO` de ElevenLabs con `eleven_flash_v2_5`. La identidad, el modelo y los parámetros públicos están en `config/config.yaml`; la clave vive únicamente en `.env` como `ELEVENLABS_API_KEY`.
 
-La voz y los audios se guardan bajo `data`, fuera de Git. La síntesis funciona localmente y no consume ninguna API.
+Cada fragmento intenta primero ElevenLabs. Si la clave falta o la red, la cuenta o el servicio fallan, el mismo fragmento se sintetiza automáticamente con Piper. El respaldo usa el hablante masculino de `es_ES-sharvard-medium` y no necesita Internet.
+
+Los audios se guardan bajo `data`, fuera de Git. `logs/voz.jsonl` registra fecha, proveedor, número de caracteres, resultado y si hubo respaldo; nunca guarda el texto pronunciado. Ese contador permite decidir con datos si el plan gratuito sigue siendo suficiente.
+
+La orden `voice.hablar` continúa siendo una prueba explícita de Piper. Se puede probar el femenino con `--hablante F` y generar el WAV sin reproducirlo con `--sin-reproducir`.
 
 ## Activación con «Astro» (fase 29)
 

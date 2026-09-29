@@ -187,7 +187,7 @@ Objetivo: hablar con ASTRO diciendo solo "Astro", en conversación continua, con
 | 32 | ✅ "No es contigo": detectar si la frase iba dirigida a ASTRO y volver a dormir | Descarta frases ajenas y registra el falso positivo |
 | 33 | ✅ Interrupción: hablar encima y que se calle | Se detiene en menos de 0,5 s |
 | 34 | ✅ Cancelación de eco: que no se oiga a sí mismo | Sin autoactivaciones con altavoz |
-| 35 | Voz propia de ASTRO: diseñarla en ElevenLabs (modelo Flash, sin clonar a ninguna persona real) y elegir plan con los datos de uso de la fase 16 | Voz configurada, con cambio automático a Piper si falla la nube |
+| 35 | ✅ Voz propia de ASTRO: diseñarla en ElevenLabs (modelo Flash, sin clonar a ninguna persona real) y elegir plan con los datos de uso de la fase 16 | Voz configurada, con cambio automático a Piper si falla la nube |
 | 36 | Optimizar latencia | Primera palabra en menos de 2 s |
 | 37 | ASTRO como servicio que arranca con el PC | Disponible sin abrir nada |
 | 38 | Pruebas de voz con 50 frases grabadas | 90% entendidas correctamente |
@@ -422,13 +422,13 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **35 — Voz propia de ASTRO: diseñarla en ElevenLabs y elegir plan con los datos de uso de la fase 16.** Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **36 — Optimizar latencia.** Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |
 | 0 — Preparación | 1–10 | Primer script con el modelo | Completado |
 | 1 — Cerebro en texto y app web | 11–22g | Conversación con herramientas, también desde el iPhone | Completado |
-| 2 — Voz | 23–38 | ASTRO 0.1 por voz | En curso: 23–34 completadas; fase 35 pendiente |
+| 2 — Voz | 23–38 | ASTRO 0.1 por voz | En curso: 23–35 completadas; fase 36 pendiente |
 | 3 — Memoria | 39–52 | Recuerda durante semanas | Pendiente |
 | 4 — Herramientas personales | 53–66 | Email y calendario por voz | Pendiente |
 | 5 — Casa | 67–78 | Control de la casa | Pendiente |

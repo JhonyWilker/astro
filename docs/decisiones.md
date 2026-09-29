@@ -274,3 +274,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Capturar y reproducir mediante un único flujo PortAudio dúplex a 16 kHz, en bloques de 10 ms. Cada bloque reproducido se entrega directamente a WebRTC AEC3 como referencia y solo la señal limpia pasa a Silero VAD. La integración nativa queda aislada detrás de código propio.
 - Motivo: La cancelación necesita conocer exactamente qué audio salía cuando se capturó cada bloque. Subir el umbral del detector no corrige un desfase temporal.
 - Consecuencia: ASTRO puede escuchar mientras habla usando altavoces, sin enviar audio fuera del equipo. La prueba real no produjo autoactivaciones y conservó una interrupción de 216 ms. Un cambio importante de micrófono, altavoz o disposición física deberá probarse otra vez.
+
+## 2026-09-30 · ElevenLabs como voz principal y Piper como respaldo
+
+- Contexto: Piper permite hablar sin Internet, pero su voz provisional no tiene la naturalidad buscada para ASTRO. Una voz en la nube introduce coste, latencia y dependencia externa.
+- Decisión: Usar la voz original `ASTRO`, diseñada sin clonar personas reales, mediante ElevenLabs Flash v2.5. Mantener Piper cargado localmente y cambiar automáticamente a él ante cualquier fallo de red, credencial, límite o servicio. La clave solo tiene permiso de texto a voz, un límite de 10.000 créditos por ciclo y vive en `.env`.
+- Motivo: Flash v2.5 admite español y prioriza la baja latencia para aplicaciones interactivas. Piper evita que ASTRO se quede mudo cuando la nube no está disponible.
+- Consecuencia: El texto que ASTRO pronuncia se envía a ElevenLabs durante el funcionamiento normal. Los audios permanecen en `data/` y el registro solo conserva metadatos y número de caracteres. Se mantiene el plan gratuito hasta que el contador real demuestre que no basta.

@@ -31,6 +31,7 @@ from voice.hablar import (
     crear_configuracion,
 )
 from voice.streaming import SegmentadorTexto, reproducir_cola_streaming
+from voice.proveedor_voz import crear_sintetizador_voz
 from voice.interrupcion import ControlInterrupcion, DetectorInterrupcionEco
 from voice.seguimiento import VentanaSeguimiento
 from voice.destinatario import registrar_falso_positivo
@@ -251,9 +252,14 @@ async def conversar(opciones: Any) -> None:
 
     print(f"Cargando Whisper {opciones.modelo} en CPU...")
     modelo = await asyncio.to_thread(cargar_modelo, opciones.modelo)
-    print("Cargando la voz local de ASTRO...")
+    print("Cargando la voz local de respaldo de ASTRO...")
     voz = await asyncio.to_thread(cargar_voz)
     configuracion_voz = crear_configuracion(opciones.hablante)
+    sintetizador_voz = crear_sintetizador_voz(voz, configuracion_voz)
+    if sintetizador_voz.principal_disponible:
+        print("Voz principal: ASTRO en ElevenLabs Flash v2.5; respaldo: Piper.")
+    else:
+        print("Voz principal no disponible; se usará Piper como respaldo.")
     indicador = IndicadorEstados(
         dispositivo=opciones.altavoz,
         sonidos=not opciones.sin_sonidos_estado,
@@ -510,6 +516,7 @@ async def conversar(opciones: Any) -> None:
                     opciones.altavoz,
                     RUTA_RESPUESTA,
                     inicio_respuesta,
+                    sintetizador=sintetizador_voz,
                     detener=detener_audio,
                     confirmar=confirmar,
                     al_empezar=lambda: indicador.cambiar(EstadoVoz.HABLANDO),
