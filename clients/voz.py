@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from websockets.exceptions import ConnectionClosed
 
 from core.expresion import ParserExpresionVoz
+from gui.instancia import BloqueoInstancia
 from voice.activacion import (
     Activacion,
     DetectorActivacion,
@@ -61,6 +62,7 @@ RAIZ_PROYECTO = Path(__file__).resolve().parents[1]
 URL_PREDETERMINADA = "ws://astro-vps:8000/ws"
 RUTA_PREGUNTA = RAIZ_PROYECTO / "data" / "audio" / "pregunta-voz.wav"
 RUTA_RESPUESTA = RAIZ_PROYECTO / "data" / "audio" / "respuesta-voz.wav"
+RUTA_BLOQUEO_VOZ = RAIZ_PROYECTO / "data" / "gui" / "voz.lock"
 
 
 @dataclass(frozen=True)
@@ -799,27 +801,34 @@ async def conversar(opciones: Any) -> None:
 
 
 def main() -> int:
-    opciones = crear_argumentos().parse_args()
+    bloqueo = BloqueoInstancia(RUTA_BLOQUEO_VOZ)
+    if not bloqueo.adquirir():
+        print("El cliente de voz de ASTRO ya está activo.")
+        return 0
     try:
-        asyncio.run(conversar(opciones))
-    except KeyboardInterrupt:
-        print("\nConversación terminada.")
-    except (
-        ConnectionClosed,
-        FileNotFoundError,
-        OSError,
-        RuntimeError,
-        ValueError,
-    ) as error:
-        print(f"No se pudo completar la conversación: {error}")
-        return 1
-    except Exception as error:
-        print(
-            "El cliente de voz falló: "
-            f"{type(error).__name__}: {error}"
-        )
-        return 1
-    return 0
+        opciones = crear_argumentos().parse_args()
+        try:
+            asyncio.run(conversar(opciones))
+        except KeyboardInterrupt:
+            print("\nConversación terminada.")
+        except (
+            ConnectionClosed,
+            FileNotFoundError,
+            OSError,
+            RuntimeError,
+            ValueError,
+        ) as error:
+            print(f"No se pudo completar la conversación: {error}")
+            return 1
+        except Exception as error:
+            print(
+                "El cliente de voz falló: "
+                f"{type(error).__name__}: {error}"
+            )
+            return 1
+        return 0
+    finally:
+        bloqueo.liberar()
 
 
 if __name__ == "__main__":

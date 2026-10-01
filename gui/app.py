@@ -1,4 +1,4 @@
-"""Aplicación de escritorio de ASTRO (fase 38b): vinculación del PC y sesión de la PWA.
+"""Aplicación de escritorio de ASTRO: PWA y supervisor local de voz.
 
 Uso: python -m gui.app
 """
@@ -20,9 +20,12 @@ from PySide6.QtWidgets import (
 )
 
 from gui import vinculacion
+from gui.instancia import BloqueoInstancia
+from gui.supervisor import lanzar_independiente
 from gui.vinculacion import ErrorVinculacion
 
 CARPETA_PERFIL = Path(__file__).resolve().parents[1] / "data" / "gui"
+RUTA_BLOQUEO_APP = CARPETA_PERFIL / "app.lock"
 INTERVALO_COMPROBACION_MS = 60_000
 INTERVALO_RENOVACION_COOKIE_MS = 86_400_000
 
@@ -100,7 +103,7 @@ class DialogoVinculacion(QDialog):
 
 
 class Vista(QWebEngineView):
-    """Ventana de la PWA. Cerrarla cierra la aplicación (la bandeja llega más adelante)."""
+    """Ventana PWA; cerrarla no detiene el supervisor independiente."""
 
     def closeEvent(self, evento):
         QApplication.quit()
@@ -207,14 +210,21 @@ def preparar_registro():
         sys.stdout = sys.stderr = archivo
 
 
-def main():
+def main() -> int:
     preparar_registro()
-    aplicacion = QApplication(sys.argv)
-    aplicacion.setQuitOnLastWindowClosed(False)
-    estado = Aplicacion()
-    QTimer.singleShot(0, estado.iniciar)
-    sys.exit(aplicacion.exec())
+    bloqueo = BloqueoInstancia(RUTA_BLOQUEO_APP)
+    if not bloqueo.adquirir():
+        return 0
+    try:
+        lanzar_independiente()
+        aplicacion = QApplication(sys.argv)
+        aplicacion.setQuitOnLastWindowClosed(False)
+        estado = Aplicacion()
+        QTimer.singleShot(0, estado.iniciar)
+        return aplicacion.exec()
+    finally:
+        bloqueo.liberar()
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

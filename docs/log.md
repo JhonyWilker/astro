@@ -386,3 +386,12 @@ Formato:
 - Prueba: `validar_fase38d.py` confirmó mismo identificador de sesión, contexto de voz visible desde PWA y ejecución de `calcular`. El núcleo conversacional produjo primer texto con Luna en 0,753 s. En la prueba física, Whisper tardó 0,35 s y la voz completa comenzó a los 2,91 s desde el final del habla.
 - Criterio de salida: Cumplido para 38d: voz y PWA comparten historial, herramientas, turnos y respaldo. Queda registrada la regresión de latencia de la ruta canónica.
 - Siguiente: fase 38e — supervisor local e instancia única.
+
+## 2026-10-01 · Fase 38e — Supervisor local e instancia única
+
+- Hecho: Se crearon un bloqueo de instancia reutilizable y un supervisor independiente. La GUI inicia el supervisor; este mantiene `clients.voz --activacion --puente`, limita los reinicios y registra estado. Ventana, supervisor y voz rechazan duplicados. Los registros usan UTF-8. Pasaron 274 pruebas.
+- Falló: Dos pruebas iniciales agotaban su reloj simulado antes de terminar; se corrigió el reloj de las pruebas sin cambiar producción. La primera lectura real mostró acentos dañados y se fijó `PYTHONIOENCODING=utf-8`.
+- Decidido: Cerrar o fallar la GUI no detiene la voz. Se permiten tres reinicios rápidos con esperas de 1, 2 y 4 segundos; una salida normal no se reinicia.
+- Prueba: La segunda instancia del supervisor terminó sin duplicar. Se detuvo únicamente la voz registrada: el supervisor conservó su PID, cambió el PID de voz y elevó el contador a uno. La voz nueva cargó Whisper, ElevenLabs, wake word, núcleo y puente. La segunda GUI terminó y dejó intacta la primera.
+- Criterio de salida: Cumplido; abrir ASTRO inicia y mantiene una única voz con puente, incluso si la ventana se cierra.
+- Siguiente: fase 38f — indicador siempre visible y bandeja.

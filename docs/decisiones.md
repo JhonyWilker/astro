@@ -330,3 +330,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: La ruta de producción será única: Whisper local transcribe, el núcleo canónico selecciona Luna o Astra y ejecuta herramientas, y ElevenLabs habla con Piper como respaldo. Se eliminan del cliente los modos Realtime para que no puedan crear otro historial ni activarse por accidente.
 - Motivo: Una conversación coherente, las herramientas y la continuidad entre dispositivos pesan más que una medición rápida obtenida saltándose el cerebro de ASTRO. El núcleo con Luna produjo su primer texto en 0,753 s, por lo que la ruta completa puede mantener el objetivo de latencia sin duplicar la arquitectura.
 - Consecuencia: El audio capturado permanece local. PWA y voz comparten la conversación por usuario autenticado y el respaldo de proveedor ocurre dentro del mismo turno del núcleo. Los módulos de medición Realtime pueden conservarse como referencia de la fase 36, pero no forman parte del cliente de producción.
+
+## 2026-10-01 · Supervisor independiente y tres bloqueos de instancia
+
+- Contexto: Si la GUI fuera propietaria del cliente de voz, cerrar o bloquear la ventana silenciaría ASTRO. Además, abrir dos veces la aplicación podía duplicar ventana, micrófono y puente.
+- Decisión: Separar ventana, supervisor y voz en procesos distintos. Cada nivel mantiene un bloqueo exclusivo liberado por el sistema operativo. El supervisor reinicia errores tras 1, 2 y 4 segundos, se detiene después de tres reinicios rápidos y reinicia el contador cuando la voz permanece estable cinco minutos.
+- Motivo: La PWA puede cerrarse o fallar sin afectar la escucha, y ningún archivo PID obsoleto puede bloquear ASTRO permanentemente.
+- Consecuencia: Cerrar la ventana ya no detiene la voz. Una salida normal no se reinicia. El estado y los PID se publican sin datos privados en `data/gui/supervisor.json`; los registros quedan fuera de Git. El apagado desde la bandeja se añadirá cuando exista ese control.

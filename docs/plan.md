@@ -206,7 +206,7 @@ Principios: una sola interfaz (la PWA) para todos los dispositivos; un superviso
 | 38b | ✅ PC como dispositivo propio, vinculado y revocable | Abre sin iniciar sesión y la revocación devuelve a vinculación |
 | 38c | ✅ Puente local autenticado y versionado: estado, transcripción y herramienta | Un receptor independiente recibe eventos; si falla, la voz continúa |
 | 38d | ✅ Consolidar una sola ruta de voz de producción a través del núcleo | Voz y PWA comparten historial, herramientas y turnos; el audio se transcribe localmente y el respaldo de IA conserva la conversación |
-| 38e | Supervisor local e instancia única para voz y puente | Abrir ASTRO inicia la voz; si el cliente cae se reinicia con límite y sin duplicados |
+| 38e | ✅ Supervisor local e instancia única para voz y puente | Abrir ASTRO inicia la voz; si el cliente cae se reinicia con límite y sin duplicados |
 | 38f | Indicador siempre visible y bandeja con estado y nivel del micrófono | Distingue micrófono apagado, espera de activación, captura, pensamiento, herramienta y habla |
 | 38g | Silencio duro del micrófono con botón y atajo global | No se captura ni transcribe; el silencio permanece tras reiniciar |
 | 38h | Voz dentro del chat con identificadores de turno y sincronización canónica | La conversación hablada aparece en vivo y termina sin mensajes duplicados |
@@ -447,14 +447,14 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **38e — Supervisor local e instancia única para voz y puente**. La fase 37 es un objetivo coordinado y se cerrará al completar 38k. Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **38f — Indicador siempre visible y bandeja con estado y nivel del micrófono**. La fase 37 es un objetivo coordinado y se cerrará al completar 38k. Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |
 | 0 — Preparación | 1–10 | Primer script con el modelo | Completado |
 | 1 — Cerebro en texto y app web | 11–22g | Conversación con herramientas, también desde el iPhone | Completado |
 | 2 — Voz | 23–38 | ASTRO 0.1 por voz | En curso: 23–36 completadas; fase 37 se cerrará con 38k |
-| 2b — ASTRO de escritorio | 38a–38l | Aplicación completa con voz e indicador de escucha | En curso: 38a–38d completadas; 38e pendiente |
+| 2b — ASTRO de escritorio | 38a–38l | Aplicación completa con voz e indicador de escucha | En curso: 38a–38e completadas; 38f pendiente |
 | 3 — Memoria | 39–52 | Recuerda durante semanas | Pendiente |
 | 4 — Herramientas personales | 53–66 | Email y calendario por voz | Pendiente |
 | 5 — Casa | 67–78 | Control de la casa | Pendiente |
