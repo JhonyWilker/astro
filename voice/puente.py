@@ -26,6 +26,7 @@ ESPERA_AUTENTICACION = 3.0
 ESPERA_ENVIO = 1.0
 MENSAJES_EN_COLA = 100
 TAMANO_MAXIMO_ENTRADA = 4096
+INTERVALO_NIVEL_SEGUNDOS = 0.1
 
 
 def origen_configurado():
@@ -61,6 +62,8 @@ class PuenteLocal:
         self._listo = threading.Event()
         self._clientes = {}
         self._ultimo_estado = None
+        self._ultimo_nivel = 0.0
+        self._ultimo_nivel_publicado = 0.0
 
     # --- Ciclo de vida (se llama desde el hilo de la voz) ---
 
@@ -125,6 +128,19 @@ class PuenteLocal:
         """Gancho para IndicadorEstados.al_cambiar."""
         self.publicar("state", state=getattr(estado, "value", str(estado)), detail=detalle)
 
+    def publicar_nivel(self, nivel):
+        """Publica el nivel del micrófono sin saturar el puente ni la GUI."""
+        try:
+            normalizado = max(0.0, min(1.0, float(nivel)))
+            self._ultimo_nivel = normalizado
+            ahora = time.monotonic()
+            if ahora - self._ultimo_nivel_publicado < INTERVALO_NIVEL_SEGUNDOS:
+                return
+            self._ultimo_nivel_publicado = ahora
+            self.publicar("mic_level", level=round(normalizado, 3))
+        except (TypeError, ValueError):
+            return
+
     def _repartir(self, tipo, mensaje, texto):
         if tipo == "state":
             self._ultimo_estado = mensaje
@@ -158,6 +174,7 @@ class PuenteLocal:
             "type": "hello",
             "state": ultimo.get("state"),
             "detail": ultimo.get("detail"),
+            "mic_level": round(self._ultimo_nivel, 3),
         }, ensure_ascii=False))
         self._clientes[conexion] = cola
         escritor = asyncio.create_task(self._escribir(conexion, cola))

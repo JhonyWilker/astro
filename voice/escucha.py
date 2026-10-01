@@ -31,6 +31,21 @@ BLOQUES_PREGRABACION = 8
 BLOQUES_PREACTIVACION = 8
 
 
+def nivel_visual_pcm(bloque: bytes | np.ndarray) -> float:
+    """Convierte PCM16 en un nivel logarítmico estable entre 0 y 1."""
+    muestras = (
+        np.frombuffer(bloque, dtype=np.int16)
+        if isinstance(bloque, bytes)
+        else np.asarray(bloque, dtype=np.int16).reshape(-1)
+    )
+    if not muestras.size:
+        return 0.0
+    normalizadas = muestras.astype(np.float32) / 32768.0
+    rms = float(np.sqrt(np.mean(np.square(normalizadas))))
+    decibelios = 20.0 * float(np.log10(max(rms, 1e-6)))
+    return max(0.0, min(1.0, (decibelios + 60.0) / 60.0))
+
+
 @dataclass(frozen=True)
 class ConfiguracionFrase:
     espera_maxima: float = 5.0
@@ -72,11 +87,21 @@ class EscuchaContinua:
         vad_frase: VadSilero | None = None,
         dispositivo: int | None = None,
         modulo_audio: Any | None = None,
+        al_nivel: Callable[[float], None] | None = None,
     ) -> None:
         self._detector = detector
         self._vad = vad_frase or VadSilero()
         self._dispositivo = dispositivo
         self._audio = modulo_audio or cargar_sounddevice()
+        self.al_nivel = al_nivel
+
+    def _publicar_nivel(self, bloque: bytes) -> None:
+        if self.al_nivel is None:
+            return
+        try:
+            self.al_nivel(nivel_visual_pcm(bloque))
+        except Exception:
+            self.al_nivel = None
 
     def nombre_dispositivo(self) -> str:
         informacion = self._audio.query_devices(self._dispositivo, "input")
@@ -163,6 +188,7 @@ class EscuchaContinua:
             datos, desbordado = flujo.read(MUESTRAS_ACTIVACION)
             desbordamientos += int(desbordado)
             bloque = bytes(datos)
+            self._publicar_nivel(bloque)
             preactivacion.append(bloque)
             activacion = self._detector.alimentar(
                 np.frombuffer(bloque, dtype=np.int16)
@@ -206,6 +232,7 @@ class EscuchaContinua:
             datos, desbordado = flujo.read(MUESTRAS_VAD)
             desbordamientos += int(desbordado)
             bloque = bytes(datos)
+            self._publicar_nivel(bloque)
             contiene_voz = (
                 self._vad.probabilidad(np.frombuffer(bloque, dtype=np.int16))
                 >= configuracion.umbral_voz

@@ -170,6 +170,42 @@ def test_cliente_nuevo_recibe_el_estado_actual(puente) -> None:
     asyncio.run(prueba())
 
 
+def test_cliente_nuevo_recibe_el_ultimo_nivel_del_microfono(puente) -> None:
+    puente.publicar_nivel(0.73)
+
+    async def prueba():
+        conexion = await conectar_autenticado(puente)
+        hola = await recibir(conexion)
+        assert hola["type"] == "hello"
+        assert hola["mic_level"] == 0.73
+        await conexion.close()
+
+    asyncio.run(prueba())
+
+
+def test_nivel_del_microfono_se_limita_y_no_satura_el_puente(monkeypatch) -> None:
+    servidor = PuenteLocal()
+    enviados = []
+    tiempos = iter((1.0, 1.05, 1.11))
+    monkeypatch.setattr("voice.puente.time.monotonic", lambda: next(tiempos))
+    monkeypatch.setattr(
+        servidor,
+        "publicar",
+        lambda tipo, **datos: enviados.append((tipo, datos)),
+    )
+
+    servidor.publicar_nivel(-2)
+    servidor.publicar_nivel(0.4)
+    servidor.publicar_nivel(3)
+
+    assert enviados == [
+        ("mic_level", {"level": 0.0}),
+        ("mic_level", {"level": 1.0}),
+    ]
+    assert servidor._ultimo_nivel == 1.0
+
+
+
 def test_un_cliente_que_desaparece_no_afecta_a_otro(puente) -> None:
     async def prueba():
         caido = await conectar_autenticado(puente)

@@ -385,6 +385,8 @@ async def conversar(opciones: Any) -> None:
         puente = PuenteLocal()
         if puente.iniciar():
             indicador.al_cambiar = puente.publicar_estado
+            if escucha_activacion is not None:
+                escucha_activacion.al_nivel = puente.publicar_nivel
             print(f"Puente local activo en 127.0.0.1:{puente.puerto}.")
         else:
             print("No se pudo iniciar el puente local; la voz continúa sin él.")

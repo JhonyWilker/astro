@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QDateTime, QThread, QTimer, QUrl, Signal
+from PySide6.QtGui import QAction
 from PySide6.QtNetwork import QNetworkCookie
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -15,12 +16,16 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
+    QSystemTrayIcon,
     QVBoxLayout,
 )
 
 from gui import vinculacion
+from gui.indicador import APARIENCIAS, IndicadorFlotante, apariencia_para, crear_icono
 from gui.instancia import BloqueoInstancia
+from gui.receptor import ReceptorPuente
 from gui.supervisor import lanzar_independiente
 from gui.vinculacion import ErrorVinculacion
 
@@ -103,11 +108,11 @@ class DialogoVinculacion(QDialog):
 
 
 class Vista(QWebEngineView):
-    """Ventana PWA; cerrarla no detiene el supervisor independiente."""
+    """Ventana PWA; cerrarla la oculta y ASTRO continúa en la bandeja."""
 
     def closeEvent(self, evento):
-        QApplication.quit()
-        super().closeEvent(evento)
+        evento.ignore()
+        self.hide()
 
 
 class Aplicacion:
@@ -123,6 +128,28 @@ class Aplicacion:
         self.vista.setPage(QWebEnginePage(perfil, self.vista))
         self.vista.setWindowTitle("ASTRO")
         self.vista.resize(420, 800)
+        self.estado_actual = "desconectado"
+        self.detalle_actual = APARIENCIAS["desconectado"].texto
+        self.nivel_microfono = 0.0
+        self.indicador = IndicadorFlotante()
+        self.indicador.activado.connect(self.mostrar_ventana)
+        self.receptor = ReceptorPuente()
+        self.receptor.evento.connect(self.al_evento_voz)
+        self.receptor.conexion.connect(self.al_conexion_voz)
+        self.bandeja = QSystemTrayIcon()
+        self.menu_bandeja = QMenu()
+        self.accion_estado = QAction(self.detalle_actual)
+        self.accion_estado.setEnabled(False)
+        self.accion_mostrar = QAction("Abrir ASTRO")
+        self.accion_mostrar.triggered.connect(self.mostrar_ventana)
+        self.accion_salir = QAction("Salir de la interfaz")
+        self.accion_salir.triggered.connect(self.salir_gui)
+        self.menu_bandeja.addAction(self.accion_estado)
+        self.menu_bandeja.addSeparator()
+        self.menu_bandeja.addAction(self.accion_mostrar)
+        self.menu_bandeja.addAction(self.accion_salir)
+        self.bandeja.setContextMenu(self.menu_bandeja)
+        self.bandeja.activated.connect(self.al_activar_bandeja)
         self.hilo = None
         self.temporizador = QTimer()
         self.temporizador.setInterval(INTERVALO_COMPROBACION_MS)
@@ -132,6 +159,10 @@ class Aplicacion:
         self.temporizador_cookie.timeout.connect(self.renovar_cookie)
 
     def iniciar(self):
+        self.actualizar_visual()
+        self.bandeja.show()
+        self.indicador.mostrar_en_esquina()
+        self.receptor.iniciar()
         token = vinculacion.leer_token()
         if token is None:
             self.vincular()
@@ -168,6 +199,66 @@ class Aplicacion:
         self.temporizador.start()
         self.temporizador_cookie.start()
 
+    def mostrar_ventana(self):
+        self.vista.showNormal()
+        self.vista.raise_()
+        self.vista.activateWindow()
+
+    def al_activar_bandeja(self, razon):
+        if razon in {
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        }:
+            self.mostrar_ventana()
+
+    def al_conexion_voz(self, conectada):
+        if not conectada:
+            self.estado_actual = "desconectado"
+            self.detalle_actual = APARIENCIAS["desconectado"].texto
+            self.nivel_microfono = 0.0
+            self.actualizar_visual()
+
+    def al_evento_voz(self, evento):
+        tipo = evento.get("type")
+        if tipo in {"hello", "state"}:
+            estado = evento.get("state")
+            if isinstance(estado, str) and estado in APARIENCIAS:
+                self.estado_actual = estado
+                detalle = evento.get("detail")
+                self.detalle_actual = (
+                    str(detalle).strip()
+                    if detalle is not None and str(detalle).strip()
+                    else apariencia_para(estado).texto
+                )
+                if estado not in {"dormido", "escuchando"}:
+                    self.nivel_microfono = 0.0
+            nivel = evento.get("mic_level")
+            if isinstance(nivel, (int, float)):
+                self.nivel_microfono = max(0.0, min(1.0, float(nivel)))
+        elif tipo == "mic_level":
+            nivel = evento.get("level")
+            if isinstance(nivel, (int, float)):
+                self.nivel_microfono = max(0.0, min(1.0, float(nivel)))
+        self.actualizar_visual()
+
+    def actualizar_visual(self):
+        apariencia = apariencia_para(self.estado_actual)
+        icono = crear_icono(apariencia, self.nivel_microfono)
+        texto = f"ASTRO · {self.detalle_actual}"
+        self.indicador.actualizar(apariencia, self.nivel_microfono)
+        self.bandeja.setIcon(icono)
+        self.bandeja.setToolTip(texto)
+        self.accion_estado.setText(self.detalle_actual)
+
+    def salir_gui(self):
+        self.receptor.detener()
+        self.indicador.hide()
+        self.bandeja.hide()
+        QApplication.quit()
+
+    def detener(self):
+        self.receptor.detener()
+
     def renovar_cookie(self):
         token = vinculacion.leer_token()
         if token is not None:
@@ -199,7 +290,7 @@ class Aplicacion:
         if dialogo.exec() == QDialog.DialogCode.Accepted:
             self.mostrar(dialogo.token)
         else:
-            QApplication.quit()
+            self.salir_gui()
 
 
 def preparar_registro():
@@ -220,6 +311,7 @@ def main() -> int:
         aplicacion = QApplication(sys.argv)
         aplicacion.setQuitOnLastWindowClosed(False)
         estado = Aplicacion()
+        aplicacion.aboutToQuit.connect(estado.detener)
         QTimer.singleShot(0, estado.iniciar)
         return aplicacion.exec()
     finally:

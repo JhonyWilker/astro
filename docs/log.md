@@ -395,3 +395,12 @@ Formato:
 - Prueba: La segunda instancia del supervisor terminó sin duplicar. Se detuvo únicamente la voz registrada: el supervisor conservó su PID, cambió el PID de voz y elevó el contador a uno. La voz nueva cargó Whisper, ElevenLabs, wake word, núcleo y puente. La segunda GUI terminó y dejó intacta la primera.
 - Criterio de salida: Cumplido; abrir ASTRO inicia y mantiene una única voz con puente, incluso si la ventana se cierra.
 - Siguiente: fase 38f — indicador siempre visible y bandeja.
+
+## 2026-10-01 · Fase 38f — Indicador siempre visible y bandeja
+
+- Hecho: Se conectó la GUI de Windows al puente local autenticado de la voz. Se añadieron un orbe flotante siempre visible y un icono de bandeja que distinguen voz no disponible, micrófono apagado, espera de «Astro», escucha, pensamiento, herramienta y habla. El nivel PCM16 del micrófono se convierte localmente a una escala logarítmica 0–1, se publica con límite de frecuencia y nunca envía audio. Cerrar la PWA ahora solo la oculta; pulsar el orbe o la bandeja vuelve a abrirla.
+- Falló: La primera orden de pruebas usó el Python global, que no tenía pytest; se repitió con el entorno virtual existente. No fue necesario instalar nada.
+- Decidido: La GUI será un observador del puente y no controlará la voz en esta fase. El medidor se actualiza durante espera y captura; no se añade trabajo al callback dúplex de 10 ms mientras ASTRO habla, para no arriesgar cortes ni repeticiones. En habla, el estado cian sustituye al medidor.
+- Prueba: Pasaron 281 pruebas, incluida una conexión real Qt → puente autenticado → estado. La ejecución real levantó GUI, supervisor, voz y puente; Jhony confirmó que el orbe, los estados, la bandeja y el cierre a segundo plano funcionan correctamente.
+- Criterio de salida: Cumplido; el estado visible coincide con lo que capturan y reproducen micrófono y altavoz.
+- Siguiente: fase 38g — silencio duro del micrófono con botón y atajo global.

@@ -337,3 +337,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Separar ventana, supervisor y voz en procesos distintos. Cada nivel mantiene un bloqueo exclusivo liberado por el sistema operativo. El supervisor reinicia errores tras 1, 2 y 4 segundos, se detiene después de tres reinicios rápidos y reinicia el contador cuando la voz permanece estable cinco minutos.
 - Motivo: La PWA puede cerrarse o fallar sin afectar la escucha, y ningún archivo PID obsoleto puede bloquear ASTRO permanentemente.
 - Consecuencia: Cerrar la ventana ya no detiene la voz. Una salida normal no se reinicia. El estado y los PID se publican sin datos privados en `data/gui/supervisor.json`; los registros quedan fuera de Git. El apagado desde la bandeja se añadirá cuando exista ese control.
+
+## 2026-10-01 · Indicador de escritorio como observador del puente
+
+- Contexto: La GUI necesita mostrar estado y nivel reales sin que un fallo visual, un receptor lento o un cálculo dentro del audio perjudique la escucha, la reproducción o la interrupción.
+- Decisión: La GUI se conecta como cliente autenticado y de solo observación al puente local. El nivel PCM16 se normaliza en la ruta ordinaria de escucha y se publica como máximo diez veces por segundo. El callback dúplex de 10 ms no calcula ni publica niveles mientras ASTRO habla; en ese turno se muestra el estado cian de habla y el medidor queda a cero.
+- Motivo: El indicador nunca debe introducir cortes, repeticiones o latencia en una ruta de audio ya validada. Diez actualizaciones por segundo dan movimiento suficiente sin saturar el puente ni el hilo gráfico.
+- Consecuencia: Cerrar la ventana principal la oculta, pero conserva orbe, bandeja, receptor y voz. La GUI distingue una desconexión del futuro silencio duro. La fase 38g podrá añadir control explícito sin convertir el navegador incrustado en dueño del proceso de voz.

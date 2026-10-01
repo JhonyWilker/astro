@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from voice.activacion import ConfiguracionActivacion, DetectorActivacion
-from voice.escucha import ConfiguracionFrase, EscuchaContinua
+from voice.escucha import ConfiguracionFrase, EscuchaContinua, nivel_visual_pcm
 
 
 class ModeloFalso:
@@ -71,7 +71,7 @@ def señal_con_frase(bloques_de_espera=3) -> np.ndarray:
     )
 
 
-def crear_escucha(señal, puntuaciones, dispositivo=None):
+def crear_escucha(señal, puntuaciones, dispositivo=None, al_nivel=None):
     audio = AudioFalso(señal)
     detector = DetectorActivacion(
         ConfiguracionActivacion(),
@@ -83,6 +83,7 @@ def crear_escucha(señal, puntuaciones, dispositivo=None):
         vad_frase=VadFalso(),
         dispositivo=dispositivo,
         modulo_audio=audio,
+        al_nivel=al_nivel,
     )
     return escucha, audio
 
@@ -116,6 +117,31 @@ def test_espera_la_activacion_y_captura_la_frase(tmp_path: Path) -> None:
     assert resultado.informe.frecuencia_hz == 16000
     assert 0.9 <= resultado.informe.duracion_segundos <= 1.1
     assert resultado.desbordamientos == 0
+
+
+def test_convierte_pcm_en_un_nivel_visual_acotado() -> None:
+    silencio = np.zeros(1280, dtype=np.int16)
+    voz = np.full(1280, 3000, dtype=np.int16)
+    saturado = np.full(1280, 32767, dtype=np.int16)
+
+    assert nivel_visual_pcm(silencio) == 0.0
+    assert 0.5 < nivel_visual_pcm(voz) < 1.0
+    assert 0.99 < nivel_visual_pcm(saturado) <= 1.0
+
+
+def test_publica_nivel_mientras_espera_y_captura(tmp_path: Path) -> None:
+    niveles = []
+    escucha, _ = crear_escucha(
+        señal_con_frase(),
+        [0.0, 0.0, 0.9],
+        al_nivel=niveles.append,
+    )
+
+    escucha.esperar_frase(tmp_path / "frase.wav", configuracion_prueba())
+
+    assert len(niveles) > 3
+    assert all(0.0 <= nivel <= 1.0 for nivel in niveles)
+    assert max(niveles) > 0.5
 
 
 def test_conserva_audio_oido_mientras_confirma_astro(tmp_path: Path) -> None:
