@@ -7,7 +7,7 @@ import websockets.asyncio.client as ws_client
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from voice.estados import EstadoVoz, IndicadorEstados
-from voice.puente import PuenteLocal
+from voice.puente import PuenteLocal, origen_configurado
 
 
 @pytest.fixture
@@ -72,6 +72,16 @@ def test_mensaje_que_no_es_auth_se_rechaza(puente) -> None:
     asyncio.run(prueba())
 
 
+def test_json_valido_que_no_es_objeto_se_rechaza(puente) -> None:
+    async def prueba():
+        conexion = await conectar(puente)
+        await conexion.send("[]")
+        with pytest.raises(ConnectionClosed):
+            await asyncio.wait_for(conexion.recv(), 3)
+
+    asyncio.run(prueba())
+
+
 def test_origen_ajeno_se_rechaza_con_403(puente) -> None:
     async def prueba():
         with pytest.raises(InvalidStatus) as error:
@@ -89,6 +99,11 @@ def test_origen_de_astro_se_acepta(puente) -> None:
         await conexion.close()
 
     asyncio.run(prueba())
+
+
+def test_origen_se_deriva_de_la_url_configurada(monkeypatch) -> None:
+    monkeypatch.setenv("ASTRO_URL_BASE", "https://otro-astro.example/ruta")
+    assert origen_configurado() == "https://otro-astro.example"
 
 
 def test_host_ajeno_se_rechaza() -> None:

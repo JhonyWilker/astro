@@ -189,32 +189,33 @@ Objetivo: hablar con ASTRO diciendo solo "Astro", en conversación continua, con
 | 34 | ✅ Cancelación de eco: que no se oiga a sí mismo | Sin autoactivaciones con altavoz |
 | 35 | ✅ Voz propia de ASTRO: diseñarla en ElevenLabs v4 (sin clonar a ninguna persona real), dotarla de interpretación emocional y elegir plan con los datos de uso de la fase 16 | Voz expresiva configurada, con cambio automático a Piper si falla la nube |
 | 36 | ✅ Optimizar latencia | Primera palabra en menos de 2 s |
-| 37 | ASTRO como servicio que arranca con el PC (en gran parte cubierta por las fases 38d y 38j del bloque 2b; se cierra allí) | Disponible sin abrir nada |
+| 37 | ASTRO como servicio que arranca con el PC (objetivo coordinado con el bloque 2b; se cierra al completar 38k) | Disponible sin abrir nada |
 | 38 | Pruebas de voz con 50 frases grabadas | 90% entendidas correctamente |
 
 **Puerta del bloque 2:** 5 minutos de conversación natural por voz, con como máximo una activación falsa por hora de uso normal. Aquí termina **ASTRO 0.1**.
 
-## Bloque 2b — ASTRO de escritorio (fases 38a–38k)
+## Bloque 2b — ASTRO de escritorio (fases 38a–38l)
 
 Objetivo: una aplicación de escritorio completa, equivalente a la app web del iPhone, que además oye y habla desde el PC y muestra en todo momento si ASTRO está escuchando. Abrir la aplicación equivale a tener a ASTRO funcionando. Se desarrolla en paralelo al bloque 2, en una rama aparte, y debe estar lista antes del bloque 3. Duración estimada: 4–5 semanas.
 
-Principios: una sola interfaz (la PWA) para todos los dispositivos; la voz sigue ejecutándose en un proceso local independiente, de modo que si la ventana falla la voz continúa; ningún audio sale del equipo.
+Principios: una sola interfaz (la PWA) para todos los dispositivos; un supervisor local y el cliente de voz viven separados de la ventana, de modo que cerrar o fallar la GUI no silencia a ASTRO. El núcleo conserva la conversación canónica. El audio del micrófono se transcribe localmente y no sale del equipo; ElevenLabs recibe texto, nunca el audio capturado.
 
 | Fase | Qué se hace | Criterio de salida |
 | --- | --- | --- |
-| 38a | ✅ Elegir la ventana de escritorio (PySide6 con motor web frente a pywebview/WebView2), verificar Python 3.14 y que la página HTTPS pueda conectar con el puerto local | Ventana que abre la PWA del VPS y chatea; decisión en `docs/decisiones.md` |
-| 38b | ✅ El PC como dispositivo propio: vinculación mediante el código de la fase 28b y token guardado en el almacén seguro de Windows | Abre sin iniciar sesión a mano y se revoca desde «Estado» |
-| 38c | ✅ Puente local de voz: el cliente de voz publica estado, nivel del micrófono, transcripción, herramienta en uso y voz activa por WebSocket local autenticado y con esquema versionado | Un proceso aparte recibe los eventos en tiempo real; si cae, la voz no se entera |
-| 38d | Lanzador y supervisor: la aplicación arranca el cliente de voz, lo vigila y lo reinicia si falla; cerrar la ventana la lleva a la bandeja y ASTRO sigue oyendo | Abrir la aplicación basta para hablar con ASTRO |
-| 38e | Indicador siempre visible y icono de bandeja: cinco estados y diferencia real entre dormido (solo palabra de activación) y escuchando (capturando) con nivel de audio | El indicador coincide con lo que captura el micrófono |
-| 38f | Silencio del micrófono con corte duro en el cliente de voz, botón y atajo global, con indicador rojo | Con el silencio activo no se captura ni transcribe nada, verificado con prueba |
-| 38g | La voz dentro del chat: lo dicho, la respuesta en streaming, las herramientas y la cuenta atrás del seguimiento en vivo, sin turnos duplicados | Una conversación hablada se lee completa en la ventana |
-| 38h | Controles de la voz de ASTRO: parar, volumen, silenciar su voz, probar la salida de audio e indicar si habla ElevenLabs o Piper | Detecta altavoz mal elegido o nube caída |
-| 38i | Panel de diagnóstico y ajustes locales: latencia por etapa (alimenta la fase 36), activaciones y falsos positivos, coste, micrófono, altavoz e interrupción | Cambiar un ajuste sin editar `config.yaml` |
-| 38j | Arranque con el PC (se coordina con la fase 37) y actualizaciones sin romper la caché de la PWA | Tras reiniciar el PC, ASTRO está disponible sin abrir nada |
-| 38k | Pruebas: lógica del puente y del supervisor con pytest y 30 minutos de uso real | Sin bloqueos; un fallo de la ventana no interrumpe la voz |
+| 38a | ✅ Ventana PySide6 con motor web para la PWA | La ventana abre la PWA, conserva la sesión y chatea |
+| 38b | ✅ PC como dispositivo propio, vinculado y revocable | Abre sin iniciar sesión y la revocación devuelve a vinculación |
+| 38c | ✅ Puente local autenticado y versionado: estado, transcripción y herramienta | Un receptor independiente recibe eventos; si falla, la voz continúa |
+| 38d | ✅ Consolidar una sola ruta de voz de producción a través del núcleo | Voz y PWA comparten historial, herramientas y turnos; el audio se transcribe localmente y el respaldo de IA conserva la conversación |
+| 38e | Supervisor local e instancia única para voz y puente | Abrir ASTRO inicia la voz; si el cliente cae se reinicia con límite y sin duplicados |
+| 38f | Indicador siempre visible y bandeja con estado y nivel del micrófono | Distingue micrófono apagado, espera de activación, captura, pensamiento, herramienta y habla |
+| 38g | Silencio duro del micrófono con botón y atajo global | No se captura ni transcribe; el silencio permanece tras reiniciar |
+| 38h | Voz dentro del chat con identificadores de turno y sincronización canónica | La conversación hablada aparece en vivo y termina sin mensajes duplicados |
+| 38i | Controles de salida: parar, volumen, silenciar voz, probar altavoz y proveedor real | Controla la reproducción y distingue ElevenLabs de Piper |
+| 38j | Diagnóstico y ajustes locales validados | Vigila la latencia, activaciones, coste y dispositivos sin editar YAML |
+| 38k | Arranque al iniciar sesión de Windows y actualizaciones seguras | Después de reiniciar e iniciar sesión, ASTRO está disponible sin abrirlo manualmente |
+| 38l | Pruebas integrales y de resistencia | Supera fallos de GUI, voz, red, proveedor, suspensión y revocación; 30 minutos activos y una prueba prolongada |
 
-**Puerta del bloque 2b:** desde el arranque del PC, una conversación de 5 minutos por voz en la que siempre sabes, mirando la aplicación, si ASTRO te escucha; el texto y la voz comparten conversación y el silencio del micrófono funciona de verdad.
+**Puerta del bloque 2b:** tras iniciar sesión en Windows, ASTRO arranca una sola vez y mantiene durante 5 minutos una conversación canónica compartida entre voz y PWA. La aplicación muestra con fidelidad qué captura y qué reproduce, el silencio del micrófono corta la captura, y los fallos controlados de la ventana o del cliente de voz no dejan el sistema bloqueado.
 
 Ideas para más adelante (no entran ahora): temas visuales, animaciones avanzadas, HUD en tablet (fase 116).
 
@@ -446,14 +447,14 @@ Objetivo: dar a ASTRO objetivos largos en vez de órdenes sueltas, y decidir si 
 
 ## Tablero de seguimiento y glosario
 
-Fase actual: **37 — ASTRO como servicio que arranca con el PC** (rama `main`; se coordina con 38d y se cierra en 38j). En paralelo, bloque 2b: **38d** (rama `gui`; 38a, 38b y 38c hechas). Actualizar esta línea y la columna Estado al cerrar cada fase.
+Fase actual: **38e — Supervisor local e instancia única para voz y puente**. La fase 37 es un objetivo coordinado y se cerrará al completar 38k. Actualizar esta línea y la columna Estado al cerrar cada fase.
 
 | Bloque | Fases | Hito | Estado |
 | --- | --- | --- | --- |
 | 0 — Preparación | 1–10 | Primer script con el modelo | Completado |
 | 1 — Cerebro en texto y app web | 11–22g | Conversación con herramientas, también desde el iPhone | Completado |
-| 2 — Voz | 23–38 | ASTRO 0.1 por voz | En curso: 23–36 completadas; fase 37 pendiente |
-| 2b — ASTRO de escritorio | 38a–38k | Aplicación completa con voz e indicador de escucha | En curso, en paralelo al bloque 2 (rama `gui`): 38a, 38b y 38c completadas; 38d pendiente |
+| 2 — Voz | 23–38 | ASTRO 0.1 por voz | En curso: 23–36 completadas; fase 37 se cerrará con 38k |
+| 2b — ASTRO de escritorio | 38a–38l | Aplicación completa con voz e indicador de escucha | En curso: 38a–38d completadas; 38e pendiente |
 | 3 — Memoria | 39–52 | Recuerda durante semanas | Pendiente |
 | 4 — Herramientas personales | 53–66 | Email y calendario por voz | Pendiente |
 | 5 — Casa | 67–78 | Control de la casa | Pendiente |

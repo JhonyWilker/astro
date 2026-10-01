@@ -370,3 +370,19 @@ Formato:
 - Pendiente no bloqueante: Reducir la repetición del nombre «Jhony» y mejorar la naturalidad del texto en una fase posterior.
 - Criterio de salida: Cumplido; la primera palabra comienza en menos de dos segundos.
 - Siguiente: fase 37 — ASTRO como servicio que arranca con el PC.
+
+## 2026-10-01 · Revisión del bloque 2b — GUI de Windows
+
+- Hecho: Se revisaron una por una las fases 38a–38k contra el código existente, el puente local, la PWA y la ruta de voz de baja latencia.
+- Falló: 38c figuraba completa pese a mencionar eventos aplazados; la promesa de audio siempre local contradecía Realtime; la ruta rápida seguía siendo experimental, sin herramientas ni historial central; y las fases 37, 38d y 38j se solapaban.
+- Decidido: El núcleo será la fuente canónica de conversación. Se añade 38d para integrar Realtime antes del supervisor y las fases posteriores avanzan una letra hasta 38l. El audio enviado a OpenAI se documenta expresamente. El supervisor será independiente de la ventana y el arranque ocurrirá al iniciar sesión en Windows.
+- Siguiente: fase 38d — ruta rápida integrada con el núcleo.
+
+## 2026-10-01 · Fase 38d — Una sola ruta de voz canónica
+
+- Hecho: Se eliminó del cliente de producción la conversación directa por Realtime, que mantenía un segundo historial sin herramientas. La ruta única queda Whisper local → núcleo canónico → ElevenLabs/Piper. Voz y PWA comparten conversación por usuario autenticado, con herramientas y respaldo dentro del mismo núcleo. Se añadieron un validador real entre dos dispositivos, URL configurable para la GUI, renovación diaria de la cookie y endurecimiento del origen y la autenticación del puente. Pasaron 269 pruebas.
+- Falló: Realtime usado solo como transcriptor funcionó, pero tardó 4,06 s antes de llegar al núcleo y se descartó. La primera prueba física heredó Astra porque el turno anterior usó la calculadora. La repetición limpia usó Luna, pero la primera voz llegó en 2,91 s incluyendo 0,50 s de silencio final; por tanto, la ruta canónica todavía no reproduce el resultado inferior a dos segundos de la antigua ruta directa.
+- Decidido: El núcleo y la coherencia entre dispositivos tienen prioridad sobre una ruta rápida paralela. El audio del micrófono permanece local. La latencia pendiente no reabre dos cerebros: se optimizará sobre esta única ruta sin reducir el silencio final elegido por Jhony ni sustituir la voz v4 sin su aprobación.
+- Prueba: `validar_fase38d.py` confirmó mismo identificador de sesión, contexto de voz visible desde PWA y ejecución de `calcular`. El núcleo conversacional produjo primer texto con Luna en 0,753 s. En la prueba física, Whisper tardó 0,35 s y la voz completa comenzó a los 2,91 s desde el final del habla.
+- Criterio de salida: Cumplido para 38d: voz y PWA comparten historial, herramientas, turnos y respaldo. Queda registrada la regresión de latencia de la ruta canónica.
+- Siguiente: fase 38e — supervisor local e instancia única.

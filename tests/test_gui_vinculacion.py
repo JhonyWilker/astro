@@ -1,4 +1,5 @@
 import json
+import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -125,3 +126,8 @@ def test_comprobar_token_valido_revocado_y_dudoso(url_servidor) -> None:
 
 def test_sin_conexion_no_se_considera_revocado() -> None:
     assert vinculacion.comprobar_token(TOKEN_VALIDO, "http://127.0.0.1:9") is None
+
+
+def test_url_base_se_puede_configurar_sin_tocar_codigo(monkeypatch) -> None:
+    monkeypatch.setenv("ASTRO_URL_BASE", "https://astro.example.test/")
+    assert vinculacion.url_base_configurada() == "https://astro.example.test"

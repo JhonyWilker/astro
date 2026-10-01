@@ -12,13 +12,14 @@ import time
 from hmac import compare_digest
 from http import HTTPStatus
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import websockets.asyncio.server as ws_server
 from websockets.exceptions import ConnectionClosed
 
 VERSION_PROTOCOLO = 1
 RUTA_INFO = Path(__file__).resolve().parents[1] / "data" / "puente.json"
-ORIGENES_PERMITIDOS = frozenset({"https://astro-vps.tailbee6db.ts.net"})
+ORIGEN_PREDETERMINADO = "https://astro-vps.tailbee6db.ts.net"
 HOSTS_PERMITIDOS = frozenset({"127.0.0.1", "localhost"})
 MAXIMO_CLIENTES = 4
 ESPERA_AUTENTICACION = 3.0
@@ -27,16 +28,29 @@ MENSAJES_EN_COLA = 100
 TAMANO_MAXIMO_ENTRADA = 4096
 
 
+def origen_configurado():
+    """Devuelve solo esquema y autoridad del origen web configurado."""
+    valor = (
+        os.getenv("ASTRO_WEB_ORIGIN")
+        or os.getenv("ASTRO_URL_BASE")
+        or ORIGEN_PREDETERMINADO
+    ).strip()
+    partes = urlsplit(valor)
+    if partes.scheme not in {"http", "https"} or not partes.netloc:
+        return ORIGEN_PREDETERMINADO
+    return f"{partes.scheme}://{partes.netloc}"
+
+
 class PuenteLocal:
     def __init__(
         self,
         ruta_info=RUTA_INFO,
-        origenes=ORIGENES_PERMITIDOS,
+        origenes=None,
         maximo_clientes=MAXIMO_CLIENTES,
         espera_autenticacion=ESPERA_AUTENTICACION,
     ):
         self.ruta_info = Path(ruta_info)
-        self.origenes = frozenset(origenes)
+        self.origenes = frozenset(origenes or {origen_configurado()})
         self.maximo_clientes = maximo_clientes
         self.espera_autenticacion = espera_autenticacion
         self.token = secrets.token_urlsafe(32)
@@ -160,7 +174,9 @@ class PuenteLocal:
         try:
             primero = await asyncio.wait_for(conexion.recv(), self.espera_autenticacion)
             datos = json.loads(primero)
-            token = datos.get("token") if isinstance(datos, dict) else None
+            if not isinstance(datos, dict):
+                return False
+            token = datos.get("token")
             return (
                 datos.get("type") == "auth"
                 and isinstance(token, str)

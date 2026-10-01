@@ -24,6 +24,7 @@ from gui.vinculacion import ErrorVinculacion
 
 CARPETA_PERFIL = Path(__file__).resolve().parents[1] / "data" / "gui"
 INTERVALO_COMPROBACION_MS = 60_000
+INTERVALO_RENOVACION_COOKIE_MS = 86_400_000
 
 
 class Hilo(QThread):
@@ -123,6 +124,9 @@ class Aplicacion:
         self.temporizador = QTimer()
         self.temporizador.setInterval(INTERVALO_COMPROBACION_MS)
         self.temporizador.timeout.connect(self.comprobar)
+        self.temporizador_cookie = QTimer()
+        self.temporizador_cookie.setInterval(INTERVALO_RENOVACION_COOKIE_MS)
+        self.temporizador_cookie.timeout.connect(self.renovar_cookie)
 
     def iniciar(self):
         token = vinculacion.leer_token()
@@ -156,9 +160,15 @@ class Aplicacion:
 
     def mostrar(self, token):
         self.inyectar_cookie(token)
-        self.vista.load(QUrl(vinculacion.URL_BASE))
+        self.vista.load(QUrl(vinculacion.url_base_configurada()))
         self.vista.show()
         self.temporizador.start()
+        self.temporizador_cookie.start()
+
+    def renovar_cookie(self):
+        token = vinculacion.leer_token()
+        if token is not None:
+            self.inyectar_cookie(token)
 
     def inyectar_cookie(self, token):
         cookie = QNetworkCookie(vinculacion.NOMBRE_COOKIE.encode(), token.encode())
@@ -167,10 +177,14 @@ class Aplicacion:
         cookie.setHttpOnly(True)
         cookie.setSameSitePolicy(QNetworkCookie.SameSite.Strict)
         cookie.setExpirationDate(QDateTime.currentDateTime().addDays(30))
-        self.perfil.cookieStore().setCookie(cookie, QUrl(vinculacion.URL_BASE))
+        self.perfil.cookieStore().setCookie(
+            cookie,
+            QUrl(vinculacion.url_base_configurada()),
+        )
 
     def revocado(self):
         self.temporizador.stop()
+        self.temporizador_cookie.stop()
         vinculacion.borrar_token()
         self.perfil.cookieStore().deleteAllCookies()
         self.vista.hide()

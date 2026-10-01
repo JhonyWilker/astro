@@ -4,6 +4,7 @@ Canjea el código de un solo uso de la fase 28b, guarda el token en el almacén 
 credenciales de Windows y comprueba si el servidor sigue aceptándolo.
 """
 import json
+import os
 import urllib.error
 import urllib.request
 from http.cookies import CookieError, SimpleCookie
@@ -11,7 +12,7 @@ from http.cookies import CookieError, SimpleCookie
 import keyring
 import keyring.errors
 
-URL_BASE = "https://astro-vps.tailbee6db.ts.net"
+URL_PREDETERMINADA = "https://astro-vps.tailbee6db.ts.net"
 NOMBRE_COOKIE = "astro_acceso"
 SERVICIO = "ASTRO"
 USUARIO = "dispositivo-pc"
@@ -22,8 +23,14 @@ class ErrorVinculacion(Exception):
     """Fallo al vincular; el mensaje está pensado para mostrarse a Jhony."""
 
 
-def canjear_codigo(codigo, url_base=URL_BASE):
+def url_base_configurada():
+    """Permite cambiar el servidor sin modificar ni recompilar la aplicación."""
+    return os.getenv("ASTRO_URL_BASE", URL_PREDETERMINADA).strip().rstrip("/")
+
+
+def canjear_codigo(codigo, url_base=None):
     """Envía el código al servidor y devuelve el token del dispositivo."""
+    url_base = url_base or url_base_configurada()
     cuerpo = json.dumps({"codigo": codigo.strip()}).encode()
     peticion = urllib.request.Request(
         f"{url_base}/auth/pair/claim",
@@ -83,8 +90,9 @@ def borrar_token():
         pass
 
 
-def comprobar_token(token, url_base=URL_BASE):
+def comprobar_token(token, url_base=None):
     """True si sigue válido, False si el servidor lo rechaza, None si no se pudo saber."""
+    url_base = url_base or url_base_configurada()
     peticion = urllib.request.Request(
         f"{url_base}/status",
         headers={"Authorization": f"Bearer {token}"},

@@ -14,8 +14,7 @@ import websockets
 from dotenv import load_dotenv
 from websockets.exceptions import ConnectionClosed
 
-from core.chat import cargar_personalidad
-from core.expresion import INSTRUCCIONES_VOZ, ParserExpresionVoz
+from core.expresion import ParserExpresionVoz
 from voice.activacion import (
     Activacion,
     DetectorActivacion,
@@ -41,7 +40,6 @@ from voice.interrupcion import (
     es_orden_silencio,
     transcripcion_interrupcion_fiable,
 )
-from voice.realtime_prueba import ErrorRealtimePrueba, SesionRealtimePrueba
 from voice.seguimiento import VentanaSeguimiento
 from voice.puente import PuenteLocal
 from voice.destinatario import (
@@ -205,135 +203,6 @@ async def recibir_respuesta(
             raise RuntimeError("Hay otro turno activo en esta conversación")
 
 
-async def responder_realtime_hablado(
-    sesion: SesionRealtimePrueba,
-    ruta_audio: Path,
-    sintetizador: Any,
-    voz: Any,
-    configuracion_voz: Any,
-    altavoz: int | None,
-    microfono: int | None,
-    detector_eco: Any | None,
-    indicador: IndicadorEstados,
-    inicio: float,
-    silencio_final: float,
-) -> tuple[bool, bool, bool]:
-    """Prueba Realtime; devuelve False si debe usarse la ruta clásica."""
-    cola_texto: asyncio.Queue[Any] = asyncio.Queue()
-    control = ControlInterrupcion()
-    bucle = asyncio.get_running_loop()
-    generado = ""
-    posicion = 0
-    expresion_actual: str | None = None
-    primer_texto: float | None = None
-    primer_fragmento: float | None = None
-    segmentador = SegmentadorTexto()
-
-    async def confirmar(_cantidad: int) -> None:
-        return
-
-    def avisar_interrupcion() -> None:
-        asyncio.run_coroutine_threadsafe(sesion.cancelar(), bucle)
-
-    tarea_voz = asyncio.create_task(reproducir_cola_streaming(
-        cola_texto,
-        voz,
-        configuracion_voz,
-        altavoz,
-        RUTA_RESPUESTA,
-        inicio,
-        sintetizador=sintetizador,
-        detener=control,
-        confirmar=confirmar,
-        al_empezar=lambda: indicador.cambiar(
-            EstadoVoz.HABLANDO,
-            sonido=False,
-        ),
-        microfono=microfono,
-        detector_eco=detector_eco,
-        al_detectar=avisar_interrupcion,
-        turno_continuo=True,
-    ))
-
-    def mostrar_y_preparar(fragmento: str) -> None:
-        nonlocal generado, posicion, primer_texto, primer_fragmento
-        generado += fragmento
-        ahora = perf_counter()
-        if primer_texto is None:
-            primer_texto = ahora - inicio
-        print(fragmento, end="", flush=True)
-        partes = segmentador.agregar(fragmento)
-        if partes and primer_fragmento is None:
-            primer_fragmento = ahora - inicio
-        for parte in partes:
-            texto_hablado = limpiar_para_voz(parte)
-            if texto_hablado:
-                posicion = generado.find(parte, posicion) + len(parte)
-                cola_texto.put_nowait(
-                    (texto_hablado, posicion, expresion_actual)
-                )
-
-    def cambiar_expresion(direccion: str) -> None:
-        nonlocal expresion_actual
-        expresion_actual = direccion
-
-    parser = ParserExpresionVoz(mostrar_y_preparar, cambiar_expresion)
-    respuesta_realtime = None
-    try:
-        respuesta_realtime = await sesion.responder(ruta_audio, parser.agregar)
-        parser.finalizar()
-    except ErrorRealtimePrueba as error:
-        parser.finalizar()
-        if not generado:
-            control.evento.set()
-            await cola_texto.put(None)
-            await tarea_voz
-            print(f"Realtime no disponible ({error}); vuelvo a la ruta local.")
-            return False, False, False
-        print(f"\nRealtime se interrumpió después de comenzar: {error}")
-
-    if (
-        respuesta_realtime is not None
-        and respuesta_realtime.ordenar_silencio
-    ):
-        control.evento.set()
-        await cola_texto.put(None)
-        await tarea_voz
-        print("Orden de silencio reconocida por Realtime.")
-        return True, False, True
-
-    for parte in segmentador.finalizar():
-        if primer_fragmento is None:
-            primer_fragmento = perf_counter() - inicio
-        texto_hablado = limpiar_para_voz(parte)
-        if texto_hablado:
-            await cola_texto.put(
-                (texto_hablado, len(generado), expresion_actual)
-            )
-    await cola_texto.put(None)
-    resultado_voz = await tarea_voz
-
-    if control.is_set():
-        latencia = control.latencia_segundos
-        detalle = f" en {latencia * 1000:.0f} ms" if latencia is not None else ""
-        print(f"\nRespuesta Realtime detenida{detalle}.")
-        return True, True, False
-    if primer_texto is None or primer_fragmento is None:
-        raise RuntimeError("Realtime no produjo una respuesta medible")
-    print()
-    print(
-        "Latencia Realtime: "
-        f"primer texto {primer_texto:.2f} s · "
-        f"primer fragmento {primer_fragmento:.2f} s · "
-        f"primera voz {resultado_voz.latencia_primera_voz:.2f} s"
-    )
-    print(
-        "Primera voz real estimada desde que terminaste: "
-        f"{resultado_voz.latencia_primera_voz + silencio_final:.2f} s"
-    )
-    return True, False, False
-
-
 def crear_argumentos() -> ArgumentParser:
     argumentos = ArgumentParser(
         description="Conversación de voz manual con ASTRO.",
@@ -358,11 +227,6 @@ def crear_argumentos() -> ArgumentParser:
         "--activacion",
         action="store_true",
         help="Esperar la palabra de activación en vez de pulsar Enter.",
-    )
-    argumentos.add_argument(
-        "--realtime-prueba",
-        action="store_true",
-        help="Probar conversación rápida con OpenAI Realtime y ElevenLabs.",
     )
     argumentos.add_argument("--modelo-activacion", type=Path)
     argumentos.add_argument("--umbral-activacion", type=float)
@@ -535,22 +399,6 @@ async def conversar(opciones: Any) -> None:
             raise RuntimeError("ASTRO no confirmó la conexión")
 
         print("ASTRO conectado.")
-        sesion_realtime = None
-        if opciones.realtime_prueba:
-            instrucciones_realtime = (
-                cargar_personalidad()
-                + "\n\n"
-                + INSTRUCCIONES_VOZ
-                + "\n\nEsta ruta es una prueba conversacional. No uses "
-                "herramientas, no ejecutes acciones y responde de forma breve."
-            )
-            try:
-                sesion_realtime = await recursos.enter_async_context(
-                    SesionRealtimePrueba(instrucciones_realtime)
-                )
-                print("Modo de prueba: OpenAI Realtime + ElevenLabs.")
-            except ErrorRealtimePrueba as error:
-                print(f"Realtime no pudo iniciarse ({error}); usaré la ruta local.")
         if escucha_activacion is not None:
             print("Di «Astro» para hablar. Pulsa Ctrl+C para terminar.")
         else:
@@ -685,81 +533,21 @@ async def conversar(opciones: Any) -> None:
                     indicador.cambiar(EstadoVoz.DORMIDO)
                     continue
             inicio_respuesta = perf_counter()
-            if sesion_realtime is not None:
-                indicador.cambiar(
-                    EstadoVoz.PENSANDO,
-                    "Realtime",
-                    sonido=False,
-                )
-                print("Jhony: [audio enviado a Realtime]")
-                print("ASTRO: ", end="", flush=True)
-                detector_realtime = (
-                    DetectorInterrupcionEco(cancelador_eco)
-                    if opciones.interrumpir_con_voz
-                    else None
-                )
-                atendido, interrumpido, ordenar_silencio = (
-                    await responder_realtime_hablado(
-                    sesion_realtime,
-                    RUTA_PREGUNTA,
-                    sintetizador_voz,
-                    voz,
-                    configuracion_voz,
-                    opciones.altavoz,
-                    opciones.microfono,
-                    detector_realtime,
-                    indicador,
-                    inicio_respuesta,
-                    opciones.silencio_final,
-                    )
-                )
-                if atendido:
-                    if es_seguimiento:
-                        ventana_seguimiento.consumir()
-                    if ordenar_silencio:
-                        ventana_seguimiento.cerrar()
-                        indicador.cambiar(EstadoVoz.DORMIDO)
-                    elif interrumpido:
-                        audio_interrupcion_pendiente = (
-                            detector_realtime.extraer_audio_interrupcion()
-                            if detector_realtime is not None
-                            else b""
-                        )
-                        if audio_interrupcion_pendiente:
-                            if not ventana_seguimiento.activa:
-                                ventana_seguimiento.abrir()
-                            indicador.cambiar(
-                                EstadoVoz.ESCUCHANDO,
-                                "Te escucho",
-                                sonido=False,
-                            )
-                        else:
-                            ventana_seguimiento.cerrar()
-                            indicador.cambiar(EstadoVoz.DORMIDO)
-                    elif escucha_activacion is not None and ventana_seguimiento.activa:
-                        indicador.cambiar(
-                            EstadoVoz.ESCUCHANDO,
-                            "Puedes continuar · quedan "
-                            f"{ventana_seguimiento.restantes}",
-                        )
-                    else:
-                        indicador.cambiar(EstadoVoz.DORMIDO)
-                    continue
             indicador.cambiar(
                 EstadoVoz.PENSANDO,
                 "Transcribiendo",
                 sonido=False,
             )
             try:
-                transcripcion = (
-                    transcripcion_interrupcion
-                    if transcripcion_interrupcion is not None
-                    else await asyncio.to_thread(
+                if transcripcion_interrupcion is not None:
+                    texto_transcrito = transcripcion_interrupcion.texto
+                else:
+                    resultado_local = await asyncio.to_thread(
                         transcribir_audio,
                         RUTA_PREGUNTA,
                         modelo,
                     )
-                )
+                    texto_transcrito = resultado_local.texto
             except ValueError as error:
                 print(f"No se pudo transcribir la frase: {error}")
                 if es_seguimiento:
@@ -783,7 +571,7 @@ async def conversar(opciones: Any) -> None:
                 try:
                     direccion = await comprobar_destinatario(
                         websocket,
-                        transcripcion.texto,
+                        texto_transcrito,
                         origen,
                     )
                 except RuntimeError as error:
@@ -798,7 +586,7 @@ async def conversar(opciones: Any) -> None:
                 registrar_falso_positivo(
                     origen,
                     direccion.motivo,
-                    len(transcripcion.texto),
+                    len(texto_transcrito),
                 )
                 ventana_seguimiento.cerrar()
                 print(
@@ -816,9 +604,9 @@ async def conversar(opciones: Any) -> None:
                 ventana_seguimiento.consumir()
             tiempo_primer_texto: float | None = None
             tiempo_primer_fragmento: float | None = None
-            print(f"Jhony: {transcripcion.texto}")
+            print(f"Jhony: {texto_transcrito}")
             if puente is not None:
-                puente.publicar("transcript", text=transcripcion.texto)
+                puente.publicar("transcript", text=texto_transcrito)
             print("ASTRO: ", end="", flush=True)
 
             cola_texto: asyncio.Queue[str | None] = asyncio.Queue()
@@ -891,7 +679,7 @@ async def conversar(opciones: Any) -> None:
             try:
                 respuesta = await recibir_respuesta(
                     websocket,
-                    transcripcion.texto,
+                    texto_transcrito,
                     mostrar_y_preparar,
                     mostrar_estado_remoto,
                     cambiar_expresion,

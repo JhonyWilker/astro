@@ -316,3 +316,17 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Usar OpenAI Realtime para la conversación rápida y conservar ElevenLabs v4 Turbo como voz audible mediante síntesis continua en streaming. Piper continúa como respaldo. El reproductor dúplex mantiene un búfer inicial de 200 ms y actualiza el retardo real de PortAudio para la cancelación de eco.
 - Motivo: Mantener la voz expresiva elegida por Jhony y conseguir conversación fluida sin perder la interrupción local.
 - Consecuencia: El audio de esta ruta se envía a OpenAI y el texto generado se envía a ElevenLabs. Si falla ElevenLabs, ASTRO avisa y cambia a Piper. La naturalidad del contenido seguirá ajustándose sin reabrir la optimización de latencia.
+
+## 2026-10-01 · Conversación canónica y reorganización del escritorio
+
+- Contexto: La revisión del bloque 2b encontró que la ruta Realtime seguía siendo una prueba directa sin herramientas ni historial central, 38c prometía eventos aplazados y las fases 37, 38d y 38j se solapaban. También se afirmaba que ningún audio salía del equipo aunque la ruta rápida lo envía a OpenAI.
+- Decisión: El núcleo será la fuente canónica de todos los turnos. Antes de crear el supervisor, la fase 38d integrará la ruta Realtime con el historial, las herramientas y el respaldo clásico. Las fases posteriores avanzan una letra hasta 38l. El supervisor será independiente de la ventana, y Windows iniciará ASTRO al entrar Jhony en su sesión, no como un servicio de sesión 0.
+- Motivo: Evitar dos ASTRO con contextos diferentes, impedir turnos duplicados en la PWA y conservar micrófono, altavoz y credenciales dentro de la sesión interactiva de Windows.
+- Consecuencia: La privacidad documenta por separado la ruta clásica local y la ruta Realtime que envía audio cifrado a OpenAI. La fase 37 se convierte en un objetivo coordinado y se cerrará con 38k. Cada fase conserva sus propias pruebas y 38l queda reservada para integración y resistencia.
+
+## 2026-10-01 · Una sola ruta de voz de producción
+
+- Contexto: La prueba Realtime directa de la fase 36 logró menos de dos segundos, pero mantenía una conversación distinta, sin herramientas ni historial compartido. Se probó como alternativa usar Realtime solo para transcribir y enviar después el texto al núcleo; funcionó, pero la transcripción tardó 4,06 s antes de que el núcleo pudiera empezar.
+- Decisión: La ruta de producción será única: Whisper local transcribe, el núcleo canónico selecciona Luna o Astra y ejecuta herramientas, y ElevenLabs habla con Piper como respaldo. Se eliminan del cliente los modos Realtime para que no puedan crear otro historial ni activarse por accidente.
+- Motivo: Una conversación coherente, las herramientas y la continuidad entre dispositivos pesan más que una medición rápida obtenida saltándose el cerebro de ASTRO. El núcleo con Luna produjo su primer texto en 0,753 s, por lo que la ruta completa puede mantener el objetivo de latencia sin duplicar la arquitectura.
+- Consecuencia: El audio capturado permanece local. PWA y voz comparten la conversación por usuario autenticado y el respaldo de proveedor ocurre dentro del mismo turno del núcleo. Los módulos de medición Realtime pueden conservarse como referencia de la fase 36, pero no forman parte del cliente de producción.
