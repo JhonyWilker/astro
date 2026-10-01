@@ -113,6 +113,17 @@ def test_despues_de_hablar_puede_escuchar_un_seguimiento() -> None:
     assert indicador.estado is EstadoVoz.ESCUCHANDO
 
 
+def test_silencio_duro_entra_desde_cualquier_estado_y_vuelve_a_dormido() -> None:
+    for origen in EstadoVoz:
+        indicador = IndicadorEstados(sonidos=False, salida=lambda _: None)
+        indicador.estado = origen
+
+        assert indicador.cambiar(EstadoVoz.MICROFONO_APAGADO) is (
+            origen is not EstadoVoz.MICROFONO_APAGADO
+        )
+        assert indicador.cambiar(EstadoVoz.DORMIDO) is True
+
+
 def test_si_no_entiende_un_seguimiento_puede_escuchar_de_nuevo() -> None:
     indicador = IndicadorEstados(sonidos=False, salida=lambda _: None)
     for estado in (

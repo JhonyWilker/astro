@@ -344,3 +344,10 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: La GUI se conecta como cliente autenticado y de solo observación al puente local. El nivel PCM16 se normaliza en la ruta ordinaria de escucha y se publica como máximo diez veces por segundo. El callback dúplex de 10 ms no calcula ni publica niveles mientras ASTRO habla; en ese turno se muestra el estado cian de habla y el medidor queda a cero.
 - Motivo: El indicador nunca debe introducir cortes, repeticiones o latencia en una ruta de audio ya validada. Diez actualizaciones por segundo dan movimiento suficiente sin saturar el puente ni el hilo gráfico.
 - Consecuencia: Cerrar la ventana principal la oculta, pero conserva orbe, bandeja, receptor y voz. La GUI distingue una desconexión del futuro silencio duro. La fase 38g podrá añadir control explícito sin convertir el navegador incrustado en dueño del proceso de voz.
+
+## 2026-10-01 · La voz es la autoridad del silencio del micrófono
+
+- Contexto: La GUI y la voz son procesos independientes. Cambiar solo un icono o descartar transcripciones no garantiza que el dispositivo deje de capturar, y el estado debe sobrevivir a una caída o reinicio del cliente.
+- Decisión: El proceso de voz conserva el estado en `data/gui/microfono.json`, cancela todas las capturas activas y confirma `MICROFONO_APAGADO` por el puente. La GUI solo solicita el cambio mediante una orden autenticada y espera esa confirmación. El botón, la bandeja y el atajo global `Ctrl+Alt+S` usan la misma orden.
+- Motivo: El proceso que abre el dispositivo debe ser la única fuente de verdad. Esto impide que la interfaz muestre un silencio falso y permite cerrar también la entrada del flujo dúplex durante una respuesta.
+- Consecuencia: Mientras está silenciado no se abre captura ni se llama a Whisper; el estado persiste tras reiniciar la voz. El archivo contiene solo un booleano, queda fuera de Git y no guarda audio ni credenciales. `Ctrl+Alt+M` no se usa porque Windows informó que ya estaba registrado por otro programa.

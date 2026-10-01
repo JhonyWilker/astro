@@ -282,3 +282,52 @@ def test_la_herramienta_en_uso_llega_al_receptor_por_el_puente(puente) -> None:
         await conexion.close()
 
     asyncio.run(prueba())
+
+
+def test_cliente_autenticado_puede_controlar_el_microfono(tmp_path) -> None:
+    cambios = []
+    servidor = PuenteLocal(
+        ruta_info=tmp_path / "p.json",
+        al_control_microfono=cambios.append,
+    )
+    assert servidor.iniciar()
+    try:
+        async def prueba():
+            conexion = await conectar_autenticado(servidor)
+            assert (await recibir(conexion))["type"] == "hello"
+            await conexion.send(json.dumps({
+                "type": "set_mic_muted",
+                "muted": True,
+            }))
+            await asyncio.sleep(0.1)
+            assert cambios == [True]
+            await conexion.close()
+
+        asyncio.run(prueba())
+    finally:
+        servidor.detener()
+
+
+def test_control_del_microfono_exige_un_booleano(tmp_path) -> None:
+    cambios = []
+    servidor = PuenteLocal(
+        ruta_info=tmp_path / "p.json",
+        al_control_microfono=cambios.append,
+    )
+    assert servidor.iniciar()
+    try:
+        async def prueba():
+            conexion = await conectar_autenticado(servidor)
+            await recibir(conexion)
+            for valor in (1, "true", None):
+                await conexion.send(json.dumps({
+                    "type": "set_mic_muted",
+                    "muted": valor,
+                }))
+            await asyncio.sleep(0.1)
+            assert cambios == []
+            await conexion.close()
+
+        asyncio.run(prueba())
+    finally:
+        servidor.detener()

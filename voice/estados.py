@@ -17,6 +17,7 @@ VOLUMEN_SENAL = 0.10
 
 
 class EstadoVoz(str, Enum):
+    MICROFONO_APAGADO = "microfono_apagado"
     DORMIDO = "dormido"
     ESCUCHANDO = "escuchando"
     PENSANDO = "pensando"
@@ -25,6 +26,7 @@ class EstadoVoz(str, Enum):
 
 
 ETIQUETAS = {
+    EstadoVoz.MICROFONO_APAGADO: "Micrófono apagado",
     EstadoVoz.DORMIDO: "Esperando «Astro»",
     EstadoVoz.ESCUCHANDO: "Habla ahora",
     EstadoVoz.PENSANDO: "Preparando respuesta",
@@ -33,6 +35,7 @@ ETIQUETAS = {
 }
 
 SENALES = {
+    EstadoVoz.MICROFONO_APAGADO: (330, 220),
     EstadoVoz.DORMIDO: (440, 330),
     EstadoVoz.ESCUCHANDO: (660, 880),
     EstadoVoz.PENSANDO: (440, 440),
@@ -41,6 +44,7 @@ SENALES = {
 }
 
 TRANSICIONES = {
+    EstadoVoz.MICROFONO_APAGADO: {EstadoVoz.DORMIDO},
     EstadoVoz.DORMIDO: {EstadoVoz.ESCUCHANDO},
     EstadoVoz.ESCUCHANDO: {EstadoVoz.PENSANDO},
     EstadoVoz.PENSANDO: {
@@ -124,7 +128,10 @@ class IndicadorEstados:
                 return False
             if (
                 self.estado is not None
-                and nuevo is not EstadoVoz.DORMIDO
+                and nuevo not in {
+                    EstadoVoz.DORMIDO,
+                    EstadoVoz.MICROFONO_APAGADO,
+                }
                 and nuevo not in TRANSICIONES[self.estado]
             ):
                 raise ValueError(

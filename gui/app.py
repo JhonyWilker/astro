@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from gui import vinculacion
+from gui.atajo import AtajoSilencio
 from gui.indicador import APARIENCIAS, IndicadorFlotante, apariencia_para, crear_icono
 from gui.instancia import BloqueoInstancia
 from gui.receptor import ReceptorPuente
@@ -110,6 +111,32 @@ class DialogoVinculacion(QDialog):
 class Vista(QWebEngineView):
     """Ventana PWA; cerrarla la oculta y ASTRO continúa en la bandeja."""
 
+    silencio_solicitado = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.boton_microfono = QPushButton("🎙 Micrófono activo", self)
+        self.boton_microfono.setToolTip("Alternar micrófono · Ctrl+Alt+S")
+        self.boton_microfono.setStyleSheet(
+            "QPushButton { background:#0f172a; color:#e2e8f0; "
+            "border:1px solid #38bdf8; border-radius:16px; padding:6px 12px; }"
+            "QPushButton:disabled { color:#64748b; border-color:#475569; }"
+        )
+        self.boton_microfono.clicked.connect(self.silencio_solicitado.emit)
+        self.boton_microfono.setEnabled(False)
+
+    def resizeEvent(self, evento):
+        super().resizeEvent(evento)
+        ancho = 174
+        self.boton_microfono.setGeometry(self.width() - ancho - 12, 12, ancho, 34)
+        self.boton_microfono.raise_()
+
+    def actualizar_microfono(self, silenciado, habilitado):
+        self.boton_microfono.setText(
+            "🔇 Micrófono apagado" if silenciado else "🎙 Micrófono activo"
+        )
+        self.boton_microfono.setEnabled(habilitado)
+
     def closeEvent(self, evento):
         evento.ignore()
         self.hide()
@@ -125,27 +152,37 @@ class Aplicacion:
         )
         self.perfil = perfil
         self.vista = Vista()
+        self.vista.silencio_solicitado.connect(self.alternar_microfono)
         self.vista.setPage(QWebEnginePage(perfil, self.vista))
         self.vista.setWindowTitle("ASTRO")
         self.vista.resize(420, 800)
         self.estado_actual = "desconectado"
         self.detalle_actual = APARIENCIAS["desconectado"].texto
         self.nivel_microfono = 0.0
+        self.voz_conectada = False
+        self.solicitud_microfono_pendiente = False
         self.indicador = IndicadorFlotante()
         self.indicador.activado.connect(self.mostrar_ventana)
         self.receptor = ReceptorPuente()
         self.receptor.evento.connect(self.al_evento_voz)
         self.receptor.conexion.connect(self.al_conexion_voz)
+        self.atajo = AtajoSilencio()
+        self.atajo.activado.connect(self.alternar_microfono)
         self.bandeja = QSystemTrayIcon()
         self.menu_bandeja = QMenu()
         self.accion_estado = QAction(self.detalle_actual)
         self.accion_estado.setEnabled(False)
         self.accion_mostrar = QAction("Abrir ASTRO")
         self.accion_mostrar.triggered.connect(self.mostrar_ventana)
+        self.accion_microfono = QAction("Silenciar micrófono")
+        self.accion_microfono.setCheckable(True)
+        self.accion_microfono.setEnabled(False)
+        self.accion_microfono.triggered.connect(self.alternar_microfono)
         self.accion_salir = QAction("Salir de la interfaz")
         self.accion_salir.triggered.connect(self.salir_gui)
         self.menu_bandeja.addAction(self.accion_estado)
         self.menu_bandeja.addSeparator()
+        self.menu_bandeja.addAction(self.accion_microfono)
         self.menu_bandeja.addAction(self.accion_mostrar)
         self.menu_bandeja.addAction(self.accion_salir)
         self.bandeja.setContextMenu(self.menu_bandeja)
@@ -163,6 +200,8 @@ class Aplicacion:
         self.bandeja.show()
         self.indicador.mostrar_en_esquina()
         self.receptor.iniciar()
+        if not self.atajo.iniciar():
+            print("[AVISO] No se pudo registrar el atajo global Ctrl+Alt+S.")
         token = vinculacion.leer_token()
         if token is None:
             self.vincular()
@@ -212,11 +251,13 @@ class Aplicacion:
             self.mostrar_ventana()
 
     def al_conexion_voz(self, conectada):
+        self.voz_conectada = conectada
         if not conectada:
             self.estado_actual = "desconectado"
             self.detalle_actual = APARIENCIAS["desconectado"].texto
             self.nivel_microfono = 0.0
-            self.actualizar_visual()
+        self.solicitud_microfono_pendiente = False
+        self.actualizar_visual()
 
     def al_evento_voz(self, evento):
         tipo = evento.get("type")
@@ -232,6 +273,7 @@ class Aplicacion:
                 )
                 if estado not in {"dormido", "escuchando"}:
                     self.nivel_microfono = 0.0
+                self.solicitud_microfono_pendiente = False
             nivel = evento.get("mic_level")
             if isinstance(nivel, (int, float)):
                 self.nivel_microfono = max(0.0, min(1.0, float(nivel)))
@@ -249,14 +291,32 @@ class Aplicacion:
         self.bandeja.setIcon(icono)
         self.bandeja.setToolTip(texto)
         self.accion_estado.setText(self.detalle_actual)
+        silenciado = self.estado_actual == "microfono_apagado"
+        habilitado = self.voz_conectada and not self.solicitud_microfono_pendiente
+        self.accion_microfono.setChecked(silenciado)
+        self.accion_microfono.setText(
+            "Reactivar micrófono" if silenciado else "Silenciar micrófono"
+        )
+        self.accion_microfono.setEnabled(habilitado)
+        self.vista.actualizar_microfono(silenciado, habilitado)
+
+    def alternar_microfono(self, _comprobado=False):
+        if not self.voz_conectada or self.solicitud_microfono_pendiente:
+            return
+        silenciar = self.estado_actual != "microfono_apagado"
+        self.solicitud_microfono_pendiente = True
+        self.actualizar_visual()
+        self.receptor.establecer_microfono(silenciar)
 
     def salir_gui(self):
+        self.atajo.detener()
         self.receptor.detener()
         self.indicador.hide()
         self.bandeja.hide()
         QApplication.quit()
 
     def detener(self):
+        self.atajo.detener()
         self.receptor.detener()
 
     def renovar_cookie(self):

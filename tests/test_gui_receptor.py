@@ -44,3 +44,25 @@ def test_receptor_gui_se_autentica_y_recibe_estado_real(tmp_path) -> None:
         receptor.detener()
         puente.detener()
 
+
+def test_receptor_gui_envia_el_silencio_al_proceso_de_voz(tmp_path) -> None:
+    ruta = tmp_path / "puente.json"
+    cambios = []
+    puente = PuenteLocal(
+        ruta_info=ruta,
+        al_control_microfono=cambios.append,
+    )
+    assert puente.iniciar()
+    receptor = ReceptorPuente(ruta_info=ruta, espera_reintento=0.02)
+    conexiones = []
+    receptor.conexion.connect(conexiones.append)
+    try:
+        receptor.iniciar()
+        assert esperar_qt(lambda: True in conexiones)
+
+        receptor.establecer_microfono(True)
+
+        assert esperar_qt(lambda: cambios == [True])
+    finally:
+        receptor.detener()
+        puente.detener()

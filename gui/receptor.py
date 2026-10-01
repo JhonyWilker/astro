@@ -1,6 +1,7 @@
 """Receptor no bloqueante del puente local del nodo de voz."""
 import asyncio
 import json
+from queue import Empty, Queue
 import threading
 
 import websockets.asyncio.client as ws_client
@@ -21,6 +22,18 @@ class ReceptorPuente(QObject):
         self._parar = threading.Event()
         self._hilo = None
         self._conectado = None
+        self._ordenes = Queue(maxsize=8)
+
+    def establecer_microfono(self, silenciado: bool) -> None:
+        if not isinstance(silenciado, bool):
+            raise TypeError("El estado del micrófono debe ser booleano")
+        try:
+            self._ordenes.put_nowait({
+                "type": "set_mic_muted",
+                "muted": silenciado,
+            })
+        except Exception:
+            return
 
     def iniciar(self) -> None:
         if self._hilo is not None and self._hilo.is_alive():
@@ -69,9 +82,19 @@ class ReceptorPuente(QObject):
                     self._cambiar_conexion(True)
                     while not self._parar.is_set():
                         try:
+                            orden = self._ordenes.get_nowait()
+                        except Empty:
+                            orden = None
+                        if orden is not None:
+                            try:
+                                await conexion.send(json.dumps(orden))
+                            except Exception:
+                                self._ordenes.put_nowait(orden)
+                                raise
+                        try:
                             mensaje = await asyncio.wait_for(
                                 conexion.recv(),
-                                timeout=0.5,
+                                timeout=0.05,
                             )
                         except asyncio.TimeoutError:
                             continue
@@ -82,4 +105,3 @@ class ReceptorPuente(QObject):
                 pass
             self._cambiar_conexion(False)
             await self._esperar()
-

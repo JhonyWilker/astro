@@ -7,7 +7,6 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass, replace
 from pathlib import Path
 from time import perf_counter
-from threading import Event
 from typing import Any, Callable
 
 import websockets
@@ -43,6 +42,7 @@ from voice.interrupcion import (
 )
 from voice.seguimiento import VentanaSeguimiento
 from voice.puente import PuenteLocal
+from voice.silencio import ControlMicrofono
 from voice.destinatario import (
     clasificar_destinatario_local,
     registrar_falso_positivo,
@@ -318,6 +318,7 @@ async def conversar(opciones: Any) -> None:
         dispositivo=opciones.altavoz,
         sonidos=not opciones.sin_sonidos_estado,
     )
+    control_microfono = ControlMicrofono()
     cancelador_eco = (
         CanceladorEco(opciones.retardo_eco)
         if opciones.interrumpir_con_voz
@@ -362,6 +363,8 @@ async def conversar(opciones: Any) -> None:
         )
 
     def mostrar_activacion(activacion: Activacion) -> None:
+        if control_microfono.silenciado:
+            return
         registrar_activacion(activacion)
         indicador.cambiar(
             EstadoVoz.ESCUCHANDO,
@@ -372,17 +375,26 @@ async def conversar(opciones: Any) -> None:
         estado: str,
         herramienta: str | None,
     ) -> None:
+        if control_microfono.silenciado:
+            return
         if estado == "executing":
             detalle = (herramienta or "herramienta").replace("_", " ")
             indicador.cambiar(EstadoVoz.EJECUTANDO, detalle, sonido=False)
         elif estado == "thinking":
             indicador.cambiar(EstadoVoz.PENSANDO, sonido=False)
 
+    def cambiar_microfono(silenciado: bool) -> None:
+        control_microfono.cambiar(silenciado)
+        indicador.cambiar(
+            EstadoVoz.MICROFONO_APAGADO if silenciado else EstadoVoz.DORMIDO,
+            sonido=False,
+        )
+
     print(f"Conectando con ASTRO en {url}...")
     token = os.getenv("ASTRO_DEVICE_TOKEN", "")
     puente = None
     if opciones.puente:
-        puente = PuenteLocal()
+        puente = PuenteLocal(al_control_microfono=cambiar_microfono)
         if puente.iniciar():
             indicador.al_cambiar = puente.publicar_estado
             if escucha_activacion is not None:
@@ -408,15 +420,25 @@ async def conversar(opciones: Any) -> None:
         else:
             print("Pulsa Enter para hablar o escribe 'salir' para terminar.")
 
-        indicador.cambiar(EstadoVoz.DORMIDO)
+        indicador.cambiar(
+            EstadoVoz.MICROFONO_APAGADO
+            if control_microfono.silenciado
+            else EstadoVoz.DORMIDO,
+            sonido=False,
+        )
         audio_interrupcion_pendiente: bytes | None = None
         while True:
+            if control_microfono.silenciado:
+                ventana_seguimiento.cerrar()
+                audio_interrupcion_pendiente = None
+                await asyncio.to_thread(control_microfono.esperar_activo)
+                continue
             es_seguimiento = (
                 escucha_activacion is not None
                 and ventana_seguimiento.activa
             )
             if es_seguimiento:
-                cancelar = Event()
+                cancelar = control_microfono.nueva_cancelacion()
                 audio_inicial = audio_interrupcion_pendiente or b""
                 venia_de_interrupcion = bool(audio_inicial)
                 audio_interrupcion_pendiente = None
@@ -432,6 +454,15 @@ async def conversar(opciones: Any) -> None:
                 except asyncio.CancelledError:
                     cancelar.set()
                     raise
+                except InterruptedError:
+                    if control_microfono.silenciado:
+                        ventana_seguimiento.cerrar()
+                        indicador.cambiar(
+                            EstadoVoz.MICROFONO_APAGADO,
+                            sonido=False,
+                        )
+                        continue
+                    raise
                 except ValueError:
                     ventana_seguimiento.cerrar()
                     print("Ventana de seguimiento cerrada por inactividad.")
@@ -441,7 +472,7 @@ async def conversar(opciones: Any) -> None:
                 microfono = escucha_activacion.nombre_dispositivo()
                 desbordamientos = resultado_frase.desbordamientos
             elif escucha_activacion is not None:
-                cancelar = Event()
+                cancelar = control_microfono.nueva_cancelacion()
                 try:
                     resultado_escucha = await asyncio.to_thread(
                         escucha_activacion.esperar_frase,
@@ -452,6 +483,15 @@ async def conversar(opciones: Any) -> None:
                     )
                 except asyncio.CancelledError:
                     cancelar.set()
+                    raise
+                except InterruptedError:
+                    if control_microfono.silenciado:
+                        ventana_seguimiento.cerrar()
+                        indicador.cambiar(
+                            EstadoVoz.MICROFONO_APAGADO,
+                            sonido=False,
+                        )
+                        continue
                     raise
                 except ValueError as error:
                     ventana_seguimiento.cerrar()
@@ -490,6 +530,13 @@ async def conversar(opciones: Any) -> None:
                     indicador.cambiar(EstadoVoz.DORMIDO)
                     continue
 
+            if control_microfono.silenciado:
+                ventana_seguimiento.cerrar()
+                indicador.cambiar(
+                    EstadoVoz.MICROFONO_APAGADO,
+                    sonido=False,
+                )
+                continue
             print(
                 f"Micrófono: {microfono} · "
                 f"{informe.duracion_segundos:.2f} s"
@@ -564,6 +611,13 @@ async def conversar(opciones: Any) -> None:
                     ventana_seguimiento.cerrar()
                     indicador.cambiar(EstadoVoz.DORMIDO)
                 continue
+            if control_microfono.silenciado:
+                ventana_seguimiento.cerrar()
+                indicador.cambiar(
+                    EstadoVoz.MICROFONO_APAGADO,
+                    sonido=False,
+                )
+                continue
             tiempo_transcripcion = perf_counter() - inicio_respuesta
             origen = "followup" if es_seguimiento else "activation"
             if es_seguimiento:
@@ -614,7 +668,9 @@ async def conversar(opciones: Any) -> None:
             print("ASTRO: ", end="", flush=True)
 
             cola_texto: asyncio.Queue[str | None] = asyncio.Queue()
-            control_interrupcion = ControlInterrupcion()
+            control_interrupcion = ControlInterrupcion(
+                evento=control_microfono.nueva_cancelacion(),
+            )
             detener_audio = control_interrupcion
             detector_eco = (
                 DetectorInterrupcionEco(cancelador_eco)
@@ -730,6 +786,17 @@ async def conversar(opciones: Any) -> None:
                     )
             await cola_texto.put(None)
             resultado_voz = await tarea_voz
+            if control_microfono.silenciado:
+                await websocket.send(json.dumps({
+                    "type": "played",
+                    "characters": 0,
+                }))
+                ventana_seguimiento.cerrar()
+                indicador.cambiar(
+                    EstadoVoz.MICROFONO_APAGADO,
+                    sonido=False,
+                )
+                continue
             if detener_audio.is_set():
                 # done puede llegar antes de que termine el audio: consumir la confirmación de cancelación.
                 while json.loads(await websocket.recv()).get("type") != "cancelled":

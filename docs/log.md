@@ -404,3 +404,12 @@ Formato:
 - Prueba: Pasaron 281 pruebas, incluida una conexión real Qt → puente autenticado → estado. La ejecución real levantó GUI, supervisor, voz y puente; Jhony confirmó que el orbe, los estados, la bandeja y el cierre a segundo plano funcionan correctamente.
 - Criterio de salida: Cumplido; el estado visible coincide con lo que capturan y reproducen micrófono y altavoz.
 - Siguiente: fase 38g — silencio duro del micrófono con botón y atajo global.
+
+## 2026-10-01 · Fase 38g — Silencio duro del micrófono
+
+- Hecho: Se añadió un control persistente del micrófono, guardado localmente y fuera de Git. El puente autenticado acepta órdenes booleanas de silencio; el cliente cancela capturas y el flujo dúplex, entra en `MICROFONO_APAGADO` y espera sin abrir el micrófono ni llamar a Whisper. La GUI incorpora botón visible, acción de bandeja y atajo global `Ctrl+Alt+S`; solo muestra el cambio cuando la voz lo confirma. Se añadió un validador real y pruebas de persistencia, cancelación, protocolo y receptor.
+- Falló: `Ctrl+Alt+M` estaba ocupado por otro programa de Windows (error 1409). Se comprobaron alternativas y se eligió `Ctrl+Alt+S`, que estaba libre.
+- Decidido: El proceso de voz, no la GUI, es la fuente de verdad del silencio. Silenciar durante una respuesta cierra también el flujo dúplex para que el micrófono no permanezca abierto. El estado persiste en `data/gui/microfono.json`, sin audio ni secretos.
+- Prueba: Pasaron 290 pruebas. El validador confirmó que desaparecen los niveles al silenciar, que el silencio sobrevive al reinicio del cliente y que reaparecen al reactivar. Jhony confirmó botón, orbe rojo, ausencia de respuesta a «Astro» y reactivación mediante `Ctrl+Alt+S`.
+- Criterio de salida: Cumplido; no se captura ni transcribe mientras está silenciado y el estado permanece tras reiniciar.
+- Siguiente: fase 38h — voz dentro del chat con identificadores de turno y sincronización canónica.

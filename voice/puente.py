@@ -49,11 +49,13 @@ class PuenteLocal:
         origenes=None,
         maximo_clientes=MAXIMO_CLIENTES,
         espera_autenticacion=ESPERA_AUTENTICACION,
+        al_control_microfono=None,
     ):
         self.ruta_info = Path(ruta_info)
         self.origenes = frozenset(origenes or {origen_configurado()})
         self.maximo_clientes = maximo_clientes
         self.espera_autenticacion = espera_autenticacion
+        self.al_control_microfono = al_control_microfono
         self.token = secrets.token_urlsafe(32)
         self.puerto = None
         self._bucle = None
@@ -179,13 +181,27 @@ class PuenteLocal:
         self._clientes[conexion] = cola
         escritor = asyncio.create_task(self._escribir(conexion, cola))
         try:
-            async for _ in conexion:
-                pass  # el receptor no envía nada más; se ignora
+            async for texto in conexion:
+                self._procesar_orden(texto)
         except ConnectionClosed:
             pass
         finally:
             self._clientes.pop(conexion, None)
             escritor.cancel()
+
+    def _procesar_orden(self, texto):
+        try:
+            datos = json.loads(texto)
+            silenciado = datos.get("muted")
+            if (
+                isinstance(datos, dict)
+                and datos.get("type") == "set_mic_muted"
+                and isinstance(silenciado, bool)
+                and self.al_control_microfono is not None
+            ):
+                self.al_control_microfono(silenciado)
+        except (ValueError, TypeError, AttributeError):
+            return
 
     async def _autenticar(self, conexion):
         try:
