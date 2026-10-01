@@ -66,6 +66,17 @@ EmitirCambio = Callable[[CambioProveedor], None]
 
 
 @dataclass(frozen=True)
+class ConfiguracionConversacionRapida:
+    habilitada: bool
+    proveedor: str
+    modelo: str
+    nivel_servicio: str
+    esfuerzo_razonamiento: str
+    max_caracteres: int
+    tarifas: Tarifas
+
+
+@dataclass(frozen=True)
 class Configuracion:
     proveedor: ConfiguracionProveedor
     modelo: str
@@ -84,6 +95,8 @@ class Configuracion:
     tokens_salida_maximos: int
     turnos_historial_maximos: int
     tarifas: Tarifas
+    niveles_servicio_por_proveedor: dict[str, str] | None = None
+    conversacion_rapida: ConfiguracionConversacionRapida | None = None
 
 
 @dataclass(frozen=True)
@@ -140,6 +153,10 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
             "Falta la sección 'precios_usd_por_millon' en config/config.yaml"
         )
 
+    rapida = datos.get("conversacion_rapida")
+    if not isinstance(rapida, dict):
+        raise ValueError("Falta la sección 'conversacion_rapida'")
+
     proveedor_identificador = datos.get("proveedor")
     if (
         not isinstance(proveedor_identificador, str)
@@ -150,6 +167,7 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
 
     proveedores_configurados: dict[str, ConfiguracionProveedor] = {}
     modelos_por_proveedor: dict[str, str] = {}
+    niveles_servicio_por_proveedor: dict[str, str] = {}
     for identificador, datos_proveedor in proveedores.items():
         if not isinstance(identificador, str) or not identificador.strip():
             raise ValueError("Cada proveedor debe tener un identificador")
@@ -182,6 +200,13 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
             clave_entorno=campos_proveedor["clave_entorno"],
         )
         modelos_por_proveedor[identificador] = campos_proveedor["modelo"]
+        nivel_proveedor = datos_proveedor.get("nivel_servicio", "default")
+        if nivel_proveedor not in {"default", "fast"}:
+            raise ValueError(
+                f"El nivel de servicio de '{identificador}' debe ser "
+                "'default' o 'fast'"
+            )
+        niveles_servicio_por_proveedor[identificador] = nivel_proveedor
 
     if proveedor_identificador not in proveedores_configurados:
         raise ValueError(
@@ -223,7 +248,7 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     modelo = datos.get("modelo")
     idioma = datos.get("idioma")
     zona_horaria = datos.get("zona_horaria")
-    nivel_servicio = datos.get("nivel_servicio")
+    nivel_servicio = niveles_servicio_por_proveedor[proveedor_identificador]
     esfuerzo_razonamiento = datos.get("razonamiento")
     tokens = limites.get("tokens_salida_maximos")
     turnos = limites.get("turnos_historial_maximos")
@@ -237,7 +262,6 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
         "modelo": modelo,
         "idioma": idioma,
         "zona_horaria": zona_horaria,
-        "nivel_servicio": nivel_servicio,
     }.items():
         if not isinstance(valor, str) or not valor.strip():
             raise ValueError(f"'{nombre}' debe ser texto no vacío")
@@ -245,10 +269,6 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
     modelo = modelo.strip()
     modelos_por_proveedor[proveedor_identificador] = modelo
 
-    if nivel_servicio != "default":
-        raise ValueError(
-            "'nivel_servicio' debe ser 'default' para usar las tarifas configuradas"
-        )
     if esfuerzo_razonamiento not in {
         "low",
         "medium",
@@ -307,6 +327,43 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
         ):
             raise ValueError(f"El precio '{nombre}' debe ser un número no negativo")
 
+    habilitada_rapida = rapida.get("habilitada")
+    proveedor_rapido = rapida.get("proveedor")
+    modelo_rapido = rapida.get("modelo")
+    nivel_rapido = rapida.get("nivel_servicio")
+    razonamiento_rapido = rapida.get("razonamiento")
+    max_caracteres_rapido = rapida.get("max_caracteres")
+    precios_rapidos = rapida.get("precios_usd_por_millon")
+    if type(habilitada_rapida) is not bool:
+        raise ValueError("'conversacion_rapida.habilitada' debe ser booleano")
+    if proveedor_rapido not in proveedores_configurados:
+        raise ValueError("El proveedor de conversación rápida no existe")
+    if not isinstance(modelo_rapido, str) or not modelo_rapido.strip():
+        raise ValueError("El modelo de conversación rápida no es válido")
+    if nivel_rapido not in {"default", "fast"}:
+        raise ValueError("El nivel de conversación rápida no es válido")
+    if razonamiento_rapido not in {"none", "low", "medium", "high"}:
+        raise ValueError("El razonamiento de conversación rápida no es válido")
+    if type(max_caracteres_rapido) is not int or max_caracteres_rapido < 20:
+        raise ValueError("El límite de conversación rápida no es válido")
+    if not isinstance(precios_rapidos, dict):
+        raise ValueError("Faltan los precios de conversación rápida")
+    valores_precios_rapidos = {
+        "entrada": precios_rapidos.get("entrada"),
+        "entrada_cache": precios_rapidos.get("entrada_cache"),
+        "escritura_cache": precios_rapidos.get("escritura_cache"),
+        "salida": precios_rapidos.get("salida"),
+    }
+    for nombre, valor in valores_precios_rapidos.items():
+        if (
+            isinstance(valor, bool)
+            or not isinstance(valor, (int, float))
+            or valor < 0
+        ):
+            raise ValueError(
+                f"El precio rápido '{nombre}' debe ser no negativo"
+            )
+
     return Configuracion(
         proveedor=ConfiguracionProveedor(
             identificador=proveedor_identificador,
@@ -342,6 +399,25 @@ def cargar_configuracion(ruta: Path = RUTA_CONFIG) -> Configuracion:
                 valores_precios["escritura_cache"]
             ),
             salida_usd_millon=float(valores_precios["salida"]),
+        ),
+        niveles_servicio_por_proveedor=niveles_servicio_por_proveedor,
+        conversacion_rapida=ConfiguracionConversacionRapida(
+            habilitada=habilitada_rapida,
+            proveedor=str(proveedor_rapido),
+            modelo=modelo_rapido.strip(),
+            nivel_servicio=str(nivel_rapido),
+            esfuerzo_razonamiento=str(razonamiento_rapido),
+            max_caracteres=max_caracteres_rapido,
+            tarifas=Tarifas(
+                entrada_usd_millon=float(valores_precios_rapidos["entrada"]),
+                entrada_cache_usd_millon=float(
+                    valores_precios_rapidos["entrada_cache"]
+                ),
+                escritura_cache_usd_millon=float(
+                    valores_precios_rapidos["escritura_cache"]
+                ),
+                salida_usd_millon=float(valores_precios_rapidos["salida"]),
+            ),
         ),
     )
 

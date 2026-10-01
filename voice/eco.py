@@ -34,6 +34,13 @@ class CanceladorEco:
                 stream_delay_ms=retardo_ms,
             )
         self._procesador = procesador
+        self.actualizar_retardo(retardo_ms)
+
+    def actualizar_retardo(self, retardo_ms: float) -> int:
+        """Actualiza el desfase de captura/reproducción dentro del rango AEC."""
+        limitado = min(500, max(0, int(round(retardo_ms))))
+        self._procesador.stream_delay_ms = limitado
+        return limitado
 
     def procesar(
         self,

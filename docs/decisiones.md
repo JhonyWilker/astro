@@ -281,3 +281,38 @@ Las decisiones importantes del proyecto se registran aquí para conservar su con
 - Decisión: Usar la voz original `ASTRO`, diseñada sin clonar personas reales, mediante Eleven v4 con estabilidad 1,0 y similitud 0,84. El cerebro genera para cada frase una dirección vocal privada y de vocabulario abierto; el núcleo la separa del texto visible y del historial, y el cliente la valida antes de sintetizar. Mantener Piper cargado localmente y cambiar automáticamente a él ante cualquier fallo de red, credencial, límite o servicio. La clave solo tiene permiso de texto a voz, un límite de 10.000 créditos por ciclo y vive en `.env`.
 - Motivo: Jhony prioriza una voz natural, capaz de expresar cualquier emoción y combinación de matices, frente al menor coste y latencia de Flash. Piper evita que ASTRO se quede mudo cuando la nube no está disponible.
 - Consecuencia: El texto que ASTRO pronuncia y su dirección vocal se envían a ElevenLabs durante el funcionamiento normal; Piper recibe únicamente texto limpio. Las marcas privadas no aparecen en la PWA ni en el historial, y las etiquetas externas se neutralizan. Los audios permanecen en `data/` y el registro solo conserva metadatos y número de caracteres. V4 consume más créditos que Flash; el contador real determinará cuándo hace falta un plan de pago.
+
+## 2026-09-30 · ASTRO de escritorio: ventana sobre la PWA con puente local de voz
+
+- Contexto: Hoy el estado de la voz solo se ve por colores en la terminal y el cliente de voz se lanza a mano. Jhony necesita ver cuándo ASTRO escucha y quiere una aplicación completa en el PC, equivalente a la PWA del iPhone y que además hable y oiga.
+- Decisión: Crear el bloque 2b (fases 38a–38k), en paralelo al bloque 2 y en la rama `gui`. La aplicación de escritorio será una ventana que carga la PWA del VPS por Tailscale, para mantener una sola interfaz. La voz seguirá en un proceso local independiente que publica sus eventos por un WebSocket en 127.0.0.1, y la aplicación lo lanza y supervisa. La tecnología concreta (PySide6 o pywebview) se decide en la fase 38a tras verificar Python 3.14 y la conexión HTTPS a puerto local.
+- Motivo: Reescribir en nativo el chat, la edición, el panel de Estado y la administración de dispositivos duplicaría la PWA. Separar procesos evita que un fallo de la ventana interrumpa la voz. Nada de audio sale del equipo.
+- Consecuencia: La fase 37 queda cubierta en gran parte por 38d y 38j. Cada cambio de la PWA exige subir la versión de la caché para no romper el iPhone. Se relaja a propósito la regla de una fase cada vez: fase 36 en `main` y 38a en `gui`.
+
+## 2026-09-30 · PySide6 para la aplicación de escritorio
+
+- Contexto: La fase 38a comparó pywebview (WebView2) y PySide6 (Qt WebEngine). Ambos cargan la PWA, conservan la sesión y permiten el puente local, la bandeja y el atajo global. Solo Qt logró un orbe flotante translúcido; pywebview dejó siempre un rectángulo con tres métodos distintos.
+- Decisión: Usar PySide6 6.11.2 (Essentials y Addons) para la ventana de ASTRO: un motor web que carga la PWA con perfil persistente y un orbe dibujado nativamente. El cierre de la ventana la oculta en la bandeja.
+- Motivo: El indicador visual siempre presente es el objetivo del bloque 2b y solo Qt lo cumple de forma limpia. El coste, unos 500 MB instalados y unos 370 MB en ejecución con la PWA, es aceptable.
+- Consecuencia: El puente local en 127.0.0.1 debe comprobar el Origin y exigir un token, porque el navegador permite que cualquier página conecte a él. La GUI sigue siendo un proceso aparte de la voz. Como el proceso de la GUI es independiente, su versión de Python puede diferir de la del resto si hiciera falta.
+
+## 2026-09-30 · Identidad del PC en el almacén de credenciales de Windows
+
+- Contexto: La aplicación de escritorio necesita una identidad propia y revocable. La cookie del perfil web caduca a los 30 días, aunque el token del servidor no caduca, y un token en `.env` queda en claro.
+- Decisión: Vincular el PC con el código de un solo uso de la fase 28b, guardar el token en el almacén de credenciales de Windows (`keyring`) y reinyectarlo como cookie en cada arranque. Solo una respuesta 401 del servidor borra el token y devuelve la app a la pantalla de vincular; un fallo de red nunca lo hace.
+- Motivo: Separa la identidad del perfil del navegador, evita la caducidad de 30 días, permite revocar desde «Estado» sin cambiar el servidor y no deja el token en un archivo de texto.
+- Consecuencia: Sin cambios ni despliegue en el VPS. Cualquier proceso del usuario de Windows puede leer el token del almacén, igual que antes con `.env`. El cliente de voz seguirá con `ASTRO_DEVICE_TOKEN` hasta que la fase 38d unifique ambas identidades. Cerrar la ventana cierra la app hasta que exista la bandeja (38e).
+
+## 2026-10-01 · Puente local opt-in con el cliente de voz como servidor
+
+- Contexto: La ventana de escritorio necesita conocer en tiempo real qué hace la voz, sin que un fallo de la ventana afecte a la conversación. El navegador permite que cualquier página conecte con 127.0.0.1.
+- Decisión: El cliente de voz publica sus eventos por un WebSocket en 127.0.0.1, con puerto asignado por el sistema y token aleatorio nuevo en cada arranque guardado en `data/puente.json`. Se comprueban `Origin` y `Host`, el primer mensaje debe autenticarse en 3 s y hay un máximo de 4 clientes. El puente solo arranca con `--puente`. El protocolo lleva versión e incluye `hello`, `state` y `transcript`; la transcripción se publica solo si la frase iba dirigida a ASTRO.
+- Motivo: Que la voz sea el servidor permite que funcione sola y que la ventana se conecte cuando quiera. Publicar sin esperar y descartar a los receptores lentos garantiza que nada del lado de la ventana pueda frenar o romper la voz. Desactivarlo por defecto no cambia el comportamiento de lo ya validado.
+- Consecuencia: Se añadieron cambios mínimos y solo de adición en `voice/estados.py` y `clients/voz.py`. Matar el cliente a la fuerza deja un `data/puente.json` antiguo, que los receptores toleran reintentando. El nivel del micrófono y la voz activa se publicarán en las fases 38e y 38h. La fase 38d deberá lanzar el cliente con `--puente`.
+
+## 2026-10-01 · Ruta de voz de baja latencia
+
+- Contexto: La cadena anterior esperaba la transcripción completa, la respuesta del núcleo y suficiente texto para sintetizar, provocando entre 10 y 15 segundos hasta la primera palabra.
+- Decisión: Usar OpenAI Realtime para la conversación rápida y conservar ElevenLabs v4 Turbo como voz audible mediante síntesis continua en streaming. Piper continúa como respaldo. El reproductor dúplex mantiene un búfer inicial de 200 ms y actualiza el retardo real de PortAudio para la cancelación de eco.
+- Motivo: Mantener la voz expresiva elegida por Jhony y conseguir conversación fluida sin perder la interrupción local.
+- Consecuencia: El audio de esta ruta se envía a OpenAI y el texto generado se envía a ElevenLabs. Si falla ElevenLabs, ASTRO avisa y cambia a Piper. La naturalidad del contenido seguirá ajustándose sin reabrir la optimización de latencia.

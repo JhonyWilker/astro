@@ -28,13 +28,14 @@ from voice.vad_silero import MUESTRAS_BLOQUE as MUESTRAS_VAD, VadSilero
 
 BLOQUES_VOZ_NECESARIOS = 2
 BLOQUES_PREGRABACION = 8
+BLOQUES_PREACTIVACION = 8
 
 
 @dataclass(frozen=True)
 class ConfiguracionFrase:
     espera_maxima: float = 5.0
     duracion_maxima: float = 30.0
-    silencio_final: float = 1.0
+    silencio_final: float = 0.5
     umbral_voz: float = 0.5
 
 
@@ -98,13 +99,16 @@ class EscuchaContinua:
             channels=CANALES,
             dtype=FORMATO_MUESTRA,
         ) as flujo:
-            activacion, desbordamientos = self._esperar_activacion(
+            activacion, desbordamientos, audio_inicial = self._esperar_activacion(
                 flujo, cancelar
             )
             if al_activar is not None:
                 al_activar(activacion)
             pcm, desbordados_frase = self._capturar_frase(
-                flujo, configuracion, cancelar
+                flujo,
+                configuracion,
+                cancelar,
+                audio_inicial=audio_inicial,
             )
 
         guardar_wav(salida, pcm, FRECUENCIA_HZ)
@@ -119,6 +123,8 @@ class EscuchaContinua:
         salida: Path,
         configuracion: ConfiguracionFrase,
         cancelar: Event | None = None,
+        audio_inicial: bytes = b"",
+        voz_inicial_confirmada: bool = False,
     ) -> ResultadoFrase:
         """Captura una frase nueva sin exigir otra palabra de activación."""
         validar_configuracion(configuracion)
@@ -134,6 +140,8 @@ class EscuchaContinua:
                 flujo,
                 configuracion,
                 cancelar,
+                audio_inicial=audio_inicial,
+                voz_inicial_confirmada=voz_inicial_confirmada,
             )
 
         guardar_wav(salida, pcm, FRECUENCIA_HZ)
@@ -146,24 +154,29 @@ class EscuchaContinua:
         self,
         flujo: Any,
         cancelar: Event | None,
-    ) -> tuple[Activacion, int]:
+    ) -> tuple[Activacion, int, bytes]:
         desbordamientos = 0
+        preactivacion: deque[bytes] = deque(maxlen=BLOQUES_PREACTIVACION)
         while True:
             if cancelar is not None and cancelar.is_set():
                 raise InterruptedError("Escucha cancelada")
             datos, desbordado = flujo.read(MUESTRAS_ACTIVACION)
             desbordamientos += int(desbordado)
+            bloque = bytes(datos)
+            preactivacion.append(bloque)
             activacion = self._detector.alimentar(
-                np.frombuffer(bytes(datos), dtype=np.int16)
+                np.frombuffer(bloque, dtype=np.int16)
             )
             if activacion is not None:
-                return activacion, desbordamientos
+                return activacion, desbordamientos, b"".join(preactivacion)
 
     def _capturar_frase(
         self,
         flujo: Any,
         configuracion: ConfiguracionFrase,
         cancelar: Event | None,
+        audio_inicial: bytes = b"",
+        voz_inicial_confirmada: bool = False,
     ) -> tuple[bytes, int]:
         bloques_espera = ceil(
             configuracion.espera_maxima / SEGUNDOS_BLOQUE_VAD
@@ -176,12 +189,16 @@ class EscuchaContinua:
         )
 
         pregrabacion: deque[bytes] = deque(maxlen=BLOQUES_PREGRABACION)
-        fragmentos: list[bytes] = []
+        fragmentos: list[bytes] = (
+            [audio_inicial]
+            if audio_inicial and voz_inicial_confirmada
+            else []
+        )
         desbordamientos = 0
         esperando = 0
         seguidos = 0
         silencio = 0
-        voz_iniciada = False
+        voz_iniciada = bool(fragmentos)
 
         while True:
             if cancelar is not None and cancelar.is_set():
@@ -200,6 +217,8 @@ class EscuchaContinua:
                 seguidos = seguidos + 1 if contiene_voz else 0
                 if seguidos >= BLOQUES_VOZ_NECESARIOS:
                     voz_iniciada = True
+                    if audio_inicial:
+                        fragmentos.append(audio_inicial)
                     fragmentos.extend(pregrabacion)
                 elif esperando >= bloques_espera:
                     raise ValueError(

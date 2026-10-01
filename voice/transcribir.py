@@ -1,3 +1,5 @@
+import os
+import sys
 from argparse import ArgumentParser
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -9,6 +11,34 @@ from typing import Any
 RAIZ_PROYECTO = Path(__file__).resolve().parents[1]
 RUTA_MODELOS = RAIZ_PROYECTO / "data" / "models" / "faster-whisper"
 MODELO_PREDETERMINADO = "base"
+_DIRECTORIOS_DLL_CUDA: list[Any] = []
+
+
+def preparar_cuda_windows() -> None:
+    """Expone solo al proceso las DLL CUDA del entorno virtual."""
+    if os.name != "nt" or not hasattr(os, "add_dll_directory"):
+        return
+    raiz = Path(sys.prefix) / "Lib" / "site-packages" / "nvidia"
+    rutas_path = os.environ.get("PATH", "").split(os.pathsep)
+    for relativa in ("cublas/bin", "cuda_runtime/bin"):
+        ruta = raiz / relativa
+        if not ruta.is_dir():
+            continue
+        ruta_texto = str(ruta.resolve())
+        if ruta_texto not in rutas_path:
+            rutas_path.insert(0, ruta_texto)
+        if not any(str(manejador) == ruta_texto for manejador in _DIRECTORIOS_DLL_CUDA):
+            _DIRECTORIOS_DLL_CUDA.append(os.add_dll_directory(ruta_texto))
+    os.environ["PATH"] = os.pathsep.join(rutas_path)
+
+
+def cuda_disponible() -> bool:
+    preparar_cuda_windows()
+    try:
+        import ctranslate2
+    except ImportError:
+        return False
+    return ctranslate2.get_cuda_device_count() > 0
 
 
 @dataclass(frozen=True)
@@ -16,6 +46,8 @@ class SegmentoTranscrito:
     inicio: float
     fin: float
     texto: str
+    probabilidad_silencio: float = 0.0
+    logprob_promedio: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -31,7 +63,12 @@ class ResultadoTranscripcion:
 def cargar_modelo(
     nombre: str = MODELO_PREDETERMINADO,
     fabrica: Callable[..., Any] | None = None,
+    dispositivo: str = "cpu",
 ) -> Any:
+    if dispositivo not in {"cpu", "cuda"}:
+        raise ValueError("El dispositivo de Whisper debe ser 'cpu' o 'cuda'")
+    if dispositivo == "cuda":
+        preparar_cuda_windows()
     if fabrica is None:
         try:
             from faster_whisper import WhisperModel
@@ -43,10 +80,21 @@ def cargar_modelo(
 
     return fabrica(
         nombre,
-        device="cpu",
-        compute_type="int8",
+        device=dispositivo,
+        compute_type="int8_float16" if dispositivo == "cuda" else "int8",
         download_root=str(RUTA_MODELOS),
     )
+
+
+def cargar_modelo_preferido(
+    nombre: str = MODELO_PREDETERMINADO,
+) -> tuple[Any, str]:
+    if cuda_disponible():
+        try:
+            return cargar_modelo(nombre, dispositivo="cuda"), "cuda"
+        except (OSError, RuntimeError):
+            pass
+    return cargar_modelo(nombre, dispositivo="cpu"), "cpu"
 
 
 def transcribir_audio(
@@ -68,6 +116,10 @@ def transcribir_audio(
             inicio=float(segmento.start),
             fin=float(segmento.end),
             texto=segmento.text.strip(),
+            probabilidad_silencio=float(
+                getattr(segmento, "no_speech_prob", 0.0)
+            ),
+            logprob_promedio=float(getattr(segmento, "avg_logprob", 0.0)),
         )
         for segmento in segmentos_crudos
         if segmento.text.strip()

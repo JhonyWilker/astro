@@ -249,7 +249,8 @@ def test_sesion_conserva_herramientas_en_contexto_interno(
         lambda *args: resultado,
     )
     nucleo = SimpleNamespace(
-        rutas_para_turno=lambda: (
+        configuracion=chat.cargar_configuracion(),
+        rutas_para_turno=lambda rapida=False: (
             chat.RutaIA(
                 SimpleNamespace(),
                 chat.cargar_configuracion(),
@@ -304,7 +305,8 @@ def test_editar_turno_rebobina_y_sustituye_historial(monkeypatch) -> None:
 
     monkeypatch.setattr(sesion, "responder_con_rutas", responder)
     nucleo = SimpleNamespace(
-        rutas_para_turno=lambda: (
+        configuracion=chat.cargar_configuracion(),
+        rutas_para_turno=lambda rapida=False: (
             chat.RutaIA(SimpleNamespace(), chat.cargar_configuracion()),
         ),
         personalidad="Personalidad de prueba",
@@ -333,7 +335,8 @@ def test_editar_turno_fallido_restaura_historial(monkeypatch) -> None:
     ]
     instancia = sesion.SesionASTRO(
         nucleo=SimpleNamespace(
-            rutas_para_turno=lambda: (),
+            configuracion=chat.cargar_configuracion(),
+            rutas_para_turno=lambda rapida=False: (),
             personalidad="Personalidad de prueba",
             registro=RegistroHerramientas.descubrir(),
             registrar_fallo=lambda proveedor, error: None,
@@ -448,6 +451,71 @@ def test_ninguna_clave_produce_error_controlado(monkeypatch) -> None:
         ("openai", "RuntimeError"),
         ("openrouter", "RuntimeError"),
     ]
+
+
+def test_ruta_rapida_usa_luna_y_respaldo_conserva_astra() -> None:
+    nucleo, _ = crear_nucleo_con_rutas(("openai", "openrouter"))
+
+    principal = nucleo.configuracion_para("openai", True)
+    respaldo = nucleo.configuracion_para("openrouter", True)
+
+    assert principal.modelo == "gpt-6-luna"
+    assert principal.esfuerzo_razonamiento == "none"
+    assert principal.nivel_servicio == "fast"
+    assert principal.tarifas.salida_usd_millon == 1.0
+    assert respaldo.modelo == "openai/gpt-6-astra"
+    assert respaldo.esfuerzo_razonamiento == "low"
+    assert respaldo.nivel_servicio == "default"
+
+
+def test_sesion_rapida_no_expone_herramientas(monkeypatch) -> None:
+    selecciones = []
+    registros = []
+    configuracion = chat.cargar_configuracion()
+    nucleo = SimpleNamespace(
+        configuracion=configuracion,
+        rutas_para_turno=lambda rapida=False: selecciones.append(rapida) or (),
+        personalidad="Personalidad de prueba",
+        registro=RegistroHerramientas.descubrir(),
+        registrar_fallo=lambda proveedor, error: None,
+        registrar_exito=lambda proveedor: None,
+    )
+
+    def responder(rutas, historial, personalidad, registro, *args):
+        registros.append(registro.listar())
+        return chat.ResultadoRespuesta("Hola", (), ())
+
+    monkeypatch.setattr(sesion, "responder_con_rutas", responder)
+
+    sesion.SesionASTRO(nucleo=nucleo).preguntar("Hola, ¿cómo estás?")
+
+    assert selecciones == [True]
+    assert registros == [()]
+
+
+def test_sesion_compleja_conserva_herramientas(monkeypatch) -> None:
+    selecciones = []
+    registros = []
+    configuracion = chat.cargar_configuracion()
+    nucleo = SimpleNamespace(
+        configuracion=configuracion,
+        rutas_para_turno=lambda rapida=False: selecciones.append(rapida) or (),
+        personalidad="Personalidad de prueba",
+        registro=RegistroHerramientas.descubrir(),
+        registrar_fallo=lambda proveedor, error: None,
+        registrar_exito=lambda proveedor: None,
+    )
+
+    def responder(rutas, historial, personalidad, registro, *args):
+        registros.append(tuple(item.nombre for item in registro.listar()))
+        return chat.ResultadoRespuesta("42", (), ("calcular",))
+
+    monkeypatch.setattr(sesion, "responder_con_rutas", responder)
+
+    sesion.SesionASTRO(nucleo=nucleo).preguntar("Calcula 40 + 2")
+
+    assert selecciones == [False]
+    assert "calcular" in registros[0]
 
 
 def test_respaldo_continua_texto_parcial(monkeypatch) -> None:

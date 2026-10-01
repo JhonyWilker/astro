@@ -9,6 +9,7 @@ from voice.streaming import (
     reproducir_cola_streaming,
 )
 from voice.interrupcion import ControlInterrupcion
+from voice.proveedor_voz import BloquePCM
 
 
 def test_segmentador_emite_frases_completas() -> None:
@@ -46,8 +47,9 @@ def test_streaming_sintetiza_y_reproduce_en_orden(
     def sintetizador(texto, voz, configuracion, ruta):
         sintetizados.append((texto, ruta.name))
 
-    def reproductor(ruta, dispositivo):
+    def reproductor(ruta, dispositivo, al_primer_audio):
         reproducidos.append((ruta.name, dispositivo))
+        al_primer_audio()
         return False
 
     async def ejecutar_prueba():
@@ -88,7 +90,8 @@ def test_streaming_interrumpido_no_confirma_fragmento(tmp_path: Path) -> None:
     control = ControlInterrupcion()
     confirmados = []
 
-    def reproductor(ruta, dispositivo, detener):
+    def reproductor(ruta, dispositivo, detener, al_primer_audio):
+        al_primer_audio()
         control.detectar()
         control.registrar_detencion()
         return False
@@ -125,6 +128,10 @@ def test_streaming_conserva_la_expresion_del_fragmento(
 ) -> None:
     recibidos = []
 
+    def reproducir(*_, al_primer_audio):
+        al_primer_audio()
+        return False
+
     async def ejecutar_prueba():
         cola = asyncio.Queue()
         await cola.put(("Una noticia.", 12, "excited, amazed, warmly proud"))
@@ -137,7 +144,7 @@ def test_streaming_conserva_la_expresion_del_fragmento(
             tmp_path / "respuesta.wav",
             inicio=0.0,
             sintetizador=lambda fragmento, *_: recibidos.append(fragmento),
-            reproductor=lambda *_: False,
+            reproductor=reproducir,
             reloj=lambda: 0.1,
         )
 
@@ -146,3 +153,59 @@ def test_streaming_conserva_la_expresion_del_fragmento(
     assert recibidos == [
         FragmentoVoz("Una noticia.", "excited, amazed, warmly proud")
     ]
+
+
+def test_streaming_usa_pcm_incremental_si_esta_disponible(tmp_path: Path) -> None:
+    confirmados = []
+
+    class Configuracion:
+        frecuencia_streaming_hz = 16000
+
+    class SintetizadorStreaming:
+        streaming_disponible = True
+        configuracion = Configuracion()
+
+        async def producir_streaming(self, textos, audios, _ruta):
+            elemento = await textos.get()
+            assert elemento == ("Respuesta.", 10, None)
+            audios.put(BloquePCM(b"\x01\x00" * 160))
+            audios.put(BloquePCM(b"", 10, True))
+            assert await textos.get() is None
+            audios.put(None)
+
+    def reproducir_pcm(
+        audios, _frecuencia, _microfono, _altavoz, _control,
+        al_primer_audio, al_confirmar, *_args,
+    ):
+        assert audios.get().datos
+        al_primer_audio()
+        frontera = audios.get()
+        al_confirmar(frontera.confirmado)
+        assert audios.get() is None
+        return 1, 0
+
+    async def confirmar(cantidad):
+        confirmados.append(cantidad)
+
+    async def ejecutar():
+        cola = asyncio.Queue()
+        await cola.put(("Respuesta.", 10, None))
+        await cola.put(None)
+        return await reproducir_cola_streaming(
+            cola,
+            object(),
+            object(),
+            None,
+            tmp_path / "respuesta.wav",
+            inicio=10.0,
+            sintetizador=SintetizadorStreaming(),
+            reloj=lambda: 10.25,
+            confirmar=confirmar,
+            reproductor_pcm=reproducir_pcm,
+        )
+
+    resultado = asyncio.run(ejecutar())
+
+    assert resultado.fragmentos == 1
+    assert resultado.latencia_primera_voz == pytest.approx(0.25)
+    assert confirmados == [10]

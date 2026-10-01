@@ -5,9 +5,11 @@ from fastapi.testclient import TestClient
 
 from core.acceso import Acceso, Dispositivo
 from core.api import crear_app
+from core.chat import cargar_configuracion
 from core.sesion import SesionASTRO
 from core.turno import TurnoCancelado
 import core.sesion as modulo_sesion
+from tools.registro import RegistroHerramientas
 
 
 def test_cancelar_turno_activo_conserva_solo_prefijo_confirmado(monkeypatch):
@@ -20,7 +22,10 @@ def test_cancelar_turno_activo_conserva_solo_prefijo_confirmado(monkeypatch):
 
     monkeypatch.setattr(modulo_sesion, "responder_con_rutas", responder)
     nucleo = SimpleNamespace(
-        rutas_para_turno=lambda: (), personalidad="Prueba", registro=None,
+        configuracion=cargar_configuracion(),
+        rutas_para_turno=lambda rapida=False: (),
+        personalidad="Prueba",
+        registro=RegistroHerramientas.descubrir(),
         registrar_fallo=lambda *args: None, registrar_exito=lambda *args: None,
     )
     sesion = SesionASTRO(nucleo)
@@ -55,7 +60,10 @@ def test_cancelar_edicion_restaura_el_historial_anterior(monkeypatch):
         {"role": "assistant", "content": "Respuesta posterior"},
     ]
     nucleo = SimpleNamespace(
-        rutas_para_turno=lambda: (), personalidad="Prueba", registro=None,
+        configuracion=cargar_configuracion(),
+        rutas_para_turno=lambda rapida=False: (),
+        personalidad="Prueba",
+        registro=RegistroHerramientas.descubrir(),
         registrar_fallo=lambda *args: None, registrar_exito=lambda *args: None,
     )
     sesion = SesionASTRO(

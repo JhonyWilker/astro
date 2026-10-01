@@ -3,6 +3,7 @@ import json
 import os
 import re
 from argparse import ArgumentParser
+from contextlib import AsyncExitStack
 from dataclasses import dataclass, replace
 from pathlib import Path
 from time import perf_counter
@@ -13,6 +14,8 @@ import websockets
 from dotenv import load_dotenv
 from websockets.exceptions import ConnectionClosed
 
+from core.chat import cargar_personalidad
+from core.expresion import INSTRUCCIONES_VOZ, ParserExpresionVoz
 from voice.activacion import (
     Activacion,
     DetectorActivacion,
@@ -32,16 +35,26 @@ from voice.hablar import (
 )
 from voice.streaming import SegmentadorTexto, reproducir_cola_streaming
 from voice.proveedor_voz import crear_sintetizador_voz
-from voice.interrupcion import ControlInterrupcion, DetectorInterrupcionEco
+from voice.interrupcion import (
+    ControlInterrupcion,
+    DetectorInterrupcionEco,
+    es_orden_silencio,
+    transcripcion_interrupcion_fiable,
+)
+from voice.realtime_prueba import ErrorRealtimePrueba, SesionRealtimePrueba
 from voice.seguimiento import VentanaSeguimiento
-from voice.destinatario import registrar_falso_positivo
+from voice.puente import PuenteLocal
+from voice.destinatario import (
+    clasificar_destinatario_local,
+    registrar_falso_positivo,
+)
 from voice.detectar_voz import (
     ConfiguracionDeteccion,
     grabar_hasta_silencio,
 )
 from voice.transcribir import (
     MODELO_PREDETERMINADO,
-    cargar_modelo,
+    cargar_modelo_preferido,
     transcribir_audio,
 )
 
@@ -85,6 +98,16 @@ async def comprobar_destinatario(
     texto: str,
     origen: str,
 ) -> DireccionRemota:
+    decision_local = clasificar_destinatario_local(texto)
+    if decision_local is not None:
+        dirigida, motivo = decision_local
+        return DireccionRemota(
+            dirigida=dirigida,
+            motivo=motivo,
+            peticiones=0,
+            tokens=0,
+            coste_usd=0.0,
+        )
     await websocket.send(json.dumps({
         "type": "classify_direction",
         "text": texto,
@@ -182,6 +205,135 @@ async def recibir_respuesta(
             raise RuntimeError("Hay otro turno activo en esta conversación")
 
 
+async def responder_realtime_hablado(
+    sesion: SesionRealtimePrueba,
+    ruta_audio: Path,
+    sintetizador: Any,
+    voz: Any,
+    configuracion_voz: Any,
+    altavoz: int | None,
+    microfono: int | None,
+    detector_eco: Any | None,
+    indicador: IndicadorEstados,
+    inicio: float,
+    silencio_final: float,
+) -> tuple[bool, bool, bool]:
+    """Prueba Realtime; devuelve False si debe usarse la ruta clásica."""
+    cola_texto: asyncio.Queue[Any] = asyncio.Queue()
+    control = ControlInterrupcion()
+    bucle = asyncio.get_running_loop()
+    generado = ""
+    posicion = 0
+    expresion_actual: str | None = None
+    primer_texto: float | None = None
+    primer_fragmento: float | None = None
+    segmentador = SegmentadorTexto()
+
+    async def confirmar(_cantidad: int) -> None:
+        return
+
+    def avisar_interrupcion() -> None:
+        asyncio.run_coroutine_threadsafe(sesion.cancelar(), bucle)
+
+    tarea_voz = asyncio.create_task(reproducir_cola_streaming(
+        cola_texto,
+        voz,
+        configuracion_voz,
+        altavoz,
+        RUTA_RESPUESTA,
+        inicio,
+        sintetizador=sintetizador,
+        detener=control,
+        confirmar=confirmar,
+        al_empezar=lambda: indicador.cambiar(
+            EstadoVoz.HABLANDO,
+            sonido=False,
+        ),
+        microfono=microfono,
+        detector_eco=detector_eco,
+        al_detectar=avisar_interrupcion,
+        turno_continuo=True,
+    ))
+
+    def mostrar_y_preparar(fragmento: str) -> None:
+        nonlocal generado, posicion, primer_texto, primer_fragmento
+        generado += fragmento
+        ahora = perf_counter()
+        if primer_texto is None:
+            primer_texto = ahora - inicio
+        print(fragmento, end="", flush=True)
+        partes = segmentador.agregar(fragmento)
+        if partes and primer_fragmento is None:
+            primer_fragmento = ahora - inicio
+        for parte in partes:
+            texto_hablado = limpiar_para_voz(parte)
+            if texto_hablado:
+                posicion = generado.find(parte, posicion) + len(parte)
+                cola_texto.put_nowait(
+                    (texto_hablado, posicion, expresion_actual)
+                )
+
+    def cambiar_expresion(direccion: str) -> None:
+        nonlocal expresion_actual
+        expresion_actual = direccion
+
+    parser = ParserExpresionVoz(mostrar_y_preparar, cambiar_expresion)
+    respuesta_realtime = None
+    try:
+        respuesta_realtime = await sesion.responder(ruta_audio, parser.agregar)
+        parser.finalizar()
+    except ErrorRealtimePrueba as error:
+        parser.finalizar()
+        if not generado:
+            control.evento.set()
+            await cola_texto.put(None)
+            await tarea_voz
+            print(f"Realtime no disponible ({error}); vuelvo a la ruta local.")
+            return False, False, False
+        print(f"\nRealtime se interrumpió después de comenzar: {error}")
+
+    if (
+        respuesta_realtime is not None
+        and respuesta_realtime.ordenar_silencio
+    ):
+        control.evento.set()
+        await cola_texto.put(None)
+        await tarea_voz
+        print("Orden de silencio reconocida por Realtime.")
+        return True, False, True
+
+    for parte in segmentador.finalizar():
+        if primer_fragmento is None:
+            primer_fragmento = perf_counter() - inicio
+        texto_hablado = limpiar_para_voz(parte)
+        if texto_hablado:
+            await cola_texto.put(
+                (texto_hablado, len(generado), expresion_actual)
+            )
+    await cola_texto.put(None)
+    resultado_voz = await tarea_voz
+
+    if control.is_set():
+        latencia = control.latencia_segundos
+        detalle = f" en {latencia * 1000:.0f} ms" if latencia is not None else ""
+        print(f"\nRespuesta Realtime detenida{detalle}.")
+        return True, True, False
+    if primer_texto is None or primer_fragmento is None:
+        raise RuntimeError("Realtime no produjo una respuesta medible")
+    print()
+    print(
+        "Latencia Realtime: "
+        f"primer texto {primer_texto:.2f} s · "
+        f"primer fragmento {primer_fragmento:.2f} s · "
+        f"primera voz {resultado_voz.latencia_primera_voz:.2f} s"
+    )
+    print(
+        "Primera voz real estimada desde que terminaste: "
+        f"{resultado_voz.latencia_primera_voz + silencio_final:.2f} s"
+    )
+    return True, False, False
+
+
 def crear_argumentos() -> ArgumentParser:
     argumentos = ArgumentParser(
         description="Conversación de voz manual con ASTRO.",
@@ -199,13 +351,18 @@ def crear_argumentos() -> ArgumentParser:
     argumentos.add_argument(
         "--silencio-final",
         type=float,
-        default=1.0,
+        default=0.5,
     )
     argumentos.add_argument("--microfono", type=int)
     argumentos.add_argument(
         "--activacion",
         action="store_true",
         help="Esperar la palabra de activación en vez de pulsar Enter.",
+    )
+    argumentos.add_argument(
+        "--realtime-prueba",
+        action="store_true",
+        help="Probar conversación rápida con OpenAI Realtime y ElevenLabs.",
     )
     argumentos.add_argument("--modelo-activacion", type=Path)
     argumentos.add_argument("--umbral-activacion", type=float)
@@ -228,8 +385,25 @@ def crear_argumentos() -> ArgumentParser:
         action="store_true",
         help="Mostrar los estados sin reproducir sus señales sonoras.",
     )
-    argumentos.add_argument("--interrumpir-con-voz", action="store_true",
-        help="Escuchar mientras responde y retirar su propia voz con AEC3.")
+    argumentos.add_argument(
+        "--puente",
+        action="store_true",
+        help="Publicar el estado de la voz por un WebSocket local (127.0.0.1).",
+    )
+    interrupcion = argumentos.add_mutually_exclusive_group()
+    interrupcion.add_argument(
+        "--interrumpir-con-voz",
+        dest="interrumpir_con_voz",
+        action="store_true",
+        help="Escuchar mientras responde y retirar su propia voz con AEC3.",
+    )
+    interrupcion.add_argument(
+        "--sin-interrumpir-con-voz",
+        dest="interrumpir_con_voz",
+        action="store_false",
+        help="Desactivar expresamente la interrupción por voz.",
+    )
+    argumentos.set_defaults(interrumpir_con_voz=True)
     argumentos.add_argument(
         "--retardo-eco",
         type=int,
@@ -257,14 +431,21 @@ async def conversar(opciones: Any) -> None:
         silencio_final=opciones.silencio_final,
     )
 
-    print(f"Cargando Whisper {opciones.modelo} en CPU...")
-    modelo = await asyncio.to_thread(cargar_modelo, opciones.modelo)
+    print(f"Cargando Whisper {opciones.modelo}...")
+    modelo, dispositivo_stt = await asyncio.to_thread(
+        cargar_modelo_preferido,
+        opciones.modelo,
+    )
+    print(f"Whisper activo en {dispositivo_stt.upper()}.")
     print("Cargando la voz local de respaldo de ASTRO...")
     voz = await asyncio.to_thread(cargar_voz)
     configuracion_voz = crear_configuracion(opciones.hablante)
     sintetizador_voz = crear_sintetizador_voz(voz, configuracion_voz)
     if sintetizador_voz.principal_disponible:
-        print("Voz principal: ASTRO expresivo en ElevenLabs v4; respaldo: Piper.")
+        print(
+            "Voz principal: ASTRO expresivo en ElevenLabs "
+            f"{sintetizador_voz.configuracion.modelo}; respaldo: Piper."
+        )
     else:
         print("Voz principal no disponible; se usará Piper como respaldo.")
     indicador = IndicadorEstados(
@@ -327,24 +508,56 @@ async def conversar(opciones: Any) -> None:
     ) -> None:
         if estado == "executing":
             detalle = (herramienta or "herramienta").replace("_", " ")
-            indicador.cambiar(EstadoVoz.EJECUTANDO, detalle)
+            indicador.cambiar(EstadoVoz.EJECUTANDO, detalle, sonido=False)
         elif estado == "thinking":
-            indicador.cambiar(EstadoVoz.PENSANDO)
+            indicador.cambiar(EstadoVoz.PENSANDO, sonido=False)
 
     print(f"Conectando con ASTRO en {url}...")
     token = os.getenv("ASTRO_DEVICE_TOKEN", "")
-    async with websockets.connect(url, additional_headers={"Authorization": f"Bearer {token}"}) as websocket:
+    puente = None
+    if opciones.puente:
+        puente = PuenteLocal()
+        if puente.iniciar():
+            indicador.al_cambiar = puente.publicar_estado
+            print(f"Puente local activo en 127.0.0.1:{puente.puerto}.")
+        else:
+            print("No se pudo iniciar el puente local; la voz continúa sin él.")
+            puente = None
+    async with AsyncExitStack() as recursos:
+        if puente is not None:
+            recursos.callback(puente.detener)
+        websocket = await recursos.enter_async_context(websockets.connect(
+            url,
+            additional_headers={"Authorization": f"Bearer {token}"},
+        ))
         listo = json.loads(await websocket.recv())
         if listo.get("type") != "ready":
             raise RuntimeError("ASTRO no confirmó la conexión")
 
         print("ASTRO conectado.")
+        sesion_realtime = None
+        if opciones.realtime_prueba:
+            instrucciones_realtime = (
+                cargar_personalidad()
+                + "\n\n"
+                + INSTRUCCIONES_VOZ
+                + "\n\nEsta ruta es una prueba conversacional. No uses "
+                "herramientas, no ejecutes acciones y responde de forma breve."
+            )
+            try:
+                sesion_realtime = await recursos.enter_async_context(
+                    SesionRealtimePrueba(instrucciones_realtime)
+                )
+                print("Modo de prueba: OpenAI Realtime + ElevenLabs.")
+            except ErrorRealtimePrueba as error:
+                print(f"Realtime no pudo iniciarse ({error}); usaré la ruta local.")
         if escucha_activacion is not None:
             print("Di «Astro» para hablar. Pulsa Ctrl+C para terminar.")
         else:
             print("Pulsa Enter para hablar o escribe 'salir' para terminar.")
 
         indicador.cambiar(EstadoVoz.DORMIDO)
+        audio_interrupcion_pendiente: bytes | None = None
         while True:
             es_seguimiento = (
                 escucha_activacion is not None
@@ -352,12 +565,17 @@ async def conversar(opciones: Any) -> None:
             )
             if es_seguimiento:
                 cancelar = Event()
+                audio_inicial = audio_interrupcion_pendiente or b""
+                venia_de_interrupcion = bool(audio_inicial)
+                audio_interrupcion_pendiente = None
                 try:
                     resultado_frase = await asyncio.to_thread(
                         escucha_activacion.esperar_seguimiento,
                         RUTA_PREGUNTA,
                         configuracion_seguimiento,
                         cancelar,
+                        audio_inicial=audio_inicial,
+                        voz_inicial_confirmada=venia_de_interrupcion,
                     )
                 except asyncio.CancelledError:
                     cancelar.set()
@@ -392,7 +610,9 @@ async def conversar(opciones: Any) -> None:
                 informe = resultado_escucha.informe
                 microfono = escucha_activacion.nombre_dispositivo()
                 desbordamientos = resultado_escucha.desbordamientos
+                venia_de_interrupcion = False
             else:
+                venia_de_interrupcion = False
                 orden = (
                     await asyncio.to_thread(input, "\n[Enter] Hablar: ")
                 ).strip()
@@ -427,13 +647,118 @@ async def conversar(opciones: Any) -> None:
                     "Aviso: hubo "
                     f"{desbordamientos} desbordamiento(s) de audio."
                 )
+            transcripcion_interrupcion = None
+            if venia_de_interrupcion:
+                try:
+                    transcripcion_interrupcion = await asyncio.to_thread(
+                        transcribir_audio,
+                        RUTA_PREGUNTA,
+                        modelo,
+                    )
+                except ValueError:
+                    transcripcion_interrupcion = None
+                if (
+                    transcripcion_interrupcion is None
+                    or not transcripcion_interrupcion_fiable(
+                        transcripcion_interrupcion
+                    )
+                ):
+                    print(
+                        "Interrupción sin una frase fiable; "
+                        "ASTRO vuelve a dormir."
+                    )
+                    ventana_seguimiento.cerrar()
+                    indicador.cambiar(EstadoVoz.DORMIDO)
+                    continue
+                print(
+                    "Interrupción entendida: "
+                    f"{transcripcion_interrupcion.texto}"
+                )
+                if (
+                    es_orden_silencio(transcripcion_interrupcion.texto)
+                ):
+                    print(
+                        "Orden de silencio reconocida; "
+                        "ASTRO vuelve a dormir."
+                    )
+                    ventana_seguimiento.cerrar()
+                    indicador.cambiar(EstadoVoz.DORMIDO)
+                    continue
             inicio_respuesta = perf_counter()
-            indicador.cambiar(EstadoVoz.PENSANDO, "Transcribiendo")
-            try:
-                transcripcion = await asyncio.to_thread(
-                    transcribir_audio,
+            if sesion_realtime is not None:
+                indicador.cambiar(
+                    EstadoVoz.PENSANDO,
+                    "Realtime",
+                    sonido=False,
+                )
+                print("Jhony: [audio enviado a Realtime]")
+                print("ASTRO: ", end="", flush=True)
+                detector_realtime = (
+                    DetectorInterrupcionEco(cancelador_eco)
+                    if opciones.interrumpir_con_voz
+                    else None
+                )
+                atendido, interrumpido, ordenar_silencio = (
+                    await responder_realtime_hablado(
+                    sesion_realtime,
                     RUTA_PREGUNTA,
-                    modelo,
+                    sintetizador_voz,
+                    voz,
+                    configuracion_voz,
+                    opciones.altavoz,
+                    opciones.microfono,
+                    detector_realtime,
+                    indicador,
+                    inicio_respuesta,
+                    opciones.silencio_final,
+                    )
+                )
+                if atendido:
+                    if es_seguimiento:
+                        ventana_seguimiento.consumir()
+                    if ordenar_silencio:
+                        ventana_seguimiento.cerrar()
+                        indicador.cambiar(EstadoVoz.DORMIDO)
+                    elif interrumpido:
+                        audio_interrupcion_pendiente = (
+                            detector_realtime.extraer_audio_interrupcion()
+                            if detector_realtime is not None
+                            else b""
+                        )
+                        if audio_interrupcion_pendiente:
+                            if not ventana_seguimiento.activa:
+                                ventana_seguimiento.abrir()
+                            indicador.cambiar(
+                                EstadoVoz.ESCUCHANDO,
+                                "Te escucho",
+                                sonido=False,
+                            )
+                        else:
+                            ventana_seguimiento.cerrar()
+                            indicador.cambiar(EstadoVoz.DORMIDO)
+                    elif escucha_activacion is not None and ventana_seguimiento.activa:
+                        indicador.cambiar(
+                            EstadoVoz.ESCUCHANDO,
+                            "Puedes continuar · quedan "
+                            f"{ventana_seguimiento.restantes}",
+                        )
+                    else:
+                        indicador.cambiar(EstadoVoz.DORMIDO)
+                    continue
+            indicador.cambiar(
+                EstadoVoz.PENSANDO,
+                "Transcribiendo",
+                sonido=False,
+            )
+            try:
+                transcripcion = (
+                    transcripcion_interrupcion
+                    if transcripcion_interrupcion is not None
+                    else await asyncio.to_thread(
+                        transcribir_audio,
+                        RUTA_PREGUNTA,
+                        modelo,
+                    )
                 )
             except ValueError as error:
                 print(f"No se pudo transcribir la frase: {error}")
@@ -453,6 +778,7 @@ async def conversar(opciones: Any) -> None:
                 indicador.cambiar(
                     EstadoVoz.PENSANDO,
                     "Comprobando destinatario",
+                    sonido=False,
                 )
                 try:
                     direccion = await comprobar_destinatario(
@@ -491,6 +817,8 @@ async def conversar(opciones: Any) -> None:
             tiempo_primer_texto: float | None = None
             tiempo_primer_fragmento: float | None = None
             print(f"Jhony: {transcripcion.texto}")
+            if puente is not None:
+                puente.publicar("transcript", text=transcripcion.texto)
             print("ASTRO: ", end="", flush=True)
 
             cola_texto: asyncio.Queue[str | None] = asyncio.Queue()
@@ -527,7 +855,10 @@ async def conversar(opciones: Any) -> None:
                     sintetizador=sintetizador_voz,
                     detener=detener_audio,
                     confirmar=confirmar,
-                    al_empezar=lambda: indicador.cambiar(EstadoVoz.HABLANDO),
+                    al_empezar=lambda: indicador.cambiar(
+                        EstadoVoz.HABLANDO,
+                        sonido=False,
+                    ),
                     microfono=opciones.microfono,
                     detector_eco=detector_eco,
                     al_detectar=avisar_interrupcion,
@@ -570,18 +901,29 @@ async def conversar(opciones: Any) -> None:
                 await cola_texto.put(None)
                 resultado_voz = await tarea_voz
                 if isinstance(error, InterruptedError):
-                    ventana_seguimiento.cerrar()
+                    audio_interrupcion_pendiente = (
+                        detector_eco.extraer_audio_interrupcion()
+                        if detector_eco is not None
+                        else b""
+                    )
                     latencia = control_interrupcion.latencia_segundos
                     detalle = (
                         f" en {latencia * 1000:.0f} ms"
                         if latencia is not None
                         else ""
                     )
-                    print(
-                        "\nRespuesta detenida"
-                        f"{detalle}. Di «Astro» para volver a hablar."
-                    )
-                    indicador.cambiar(EstadoVoz.DORMIDO)
+                    print(f"\nRespuesta detenida{detalle}.")
+                    if audio_interrupcion_pendiente:
+                        if not ventana_seguimiento.activa:
+                            ventana_seguimiento.abrir()
+                        indicador.cambiar(
+                            EstadoVoz.ESCUCHANDO,
+                            "Te escucho",
+                            sonido=False,
+                        )
+                    else:
+                        ventana_seguimiento.cerrar()
+                        indicador.cambiar(EstadoVoz.DORMIDO)
                     continue
                 await websocket.send(json.dumps({"type": "played", "characters": 0}))
                 raise
@@ -600,18 +942,29 @@ async def conversar(opciones: Any) -> None:
                 # done puede llegar antes de que termine el audio: consumir la confirmación de cancelación.
                 while json.loads(await websocket.recv()).get("type") != "cancelled":
                     pass
-                ventana_seguimiento.cerrar()
+                audio_interrupcion_pendiente = (
+                    detector_eco.extraer_audio_interrupcion()
+                    if detector_eco is not None
+                    else b""
+                )
                 latencia = control_interrupcion.latencia_segundos
                 detalle = (
                     f" en {latencia * 1000:.0f} ms"
                     if latencia is not None
                     else ""
                 )
-                print(
-                    "\nRespuesta detenida"
-                    f"{detalle}. Di «Astro» para volver a hablar."
-                )
-                indicador.cambiar(EstadoVoz.DORMIDO)
+                print(f"\nRespuesta detenida{detalle}.")
+                if audio_interrupcion_pendiente:
+                    if not ventana_seguimiento.activa:
+                        ventana_seguimiento.abrir()
+                    indicador.cambiar(
+                        EstadoVoz.ESCUCHANDO,
+                        "Te escucho",
+                        sonido=False,
+                    )
+                else:
+                    ventana_seguimiento.cerrar()
+                    indicador.cambiar(EstadoVoz.DORMIDO)
                 continue
             await websocket.send(json.dumps({"type": "played", "characters": len(generado)}))
             if (
@@ -635,6 +988,11 @@ async def conversar(opciones: Any) -> None:
                 f"primer fragmento {tiempo_primer_fragmento:.2f} s · "
                 f"primera voz "
                 f"{resultado_voz.latencia_primera_voz:.2f} s"
+            )
+            print(
+                "Primera voz real estimada desde que terminaste: "
+                f"{resultado_voz.latencia_primera_voz + opciones.silencio_final:.2f} s "
+                f"(incluye {opciones.silencio_final:.2f} s para confirmar el final)"
             )
             print(f"Voz: {resultado_voz.fragmentos} fragmento(s)")
             if resultado_voz.cortes_reproduccion:

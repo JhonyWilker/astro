@@ -111,6 +111,38 @@ def test_comprobar_destinatario_interpreta_respuesta_y_uso() -> None:
     assert resultado.tokens == 9
 
 
+@pytest.mark.parametrize(
+    "texto",
+    ["Dime cuánto es dos más dos", "Sí", "Puedes repetirlo"],
+)
+def test_seguimiento_directo_se_resuelve_sin_red(texto: str) -> None:
+    websocket = WebSocketFalso([])
+
+    resultado = asyncio.run(comprobar_destinatario(
+        websocket,
+        texto,
+        "followup",
+    ))
+
+    assert resultado.dirigida is True
+    assert resultado.peticiones == 0
+    assert websocket.enviados == []
+
+
+def test_frase_ajena_explicita_se_descarta_sin_red() -> None:
+    websocket = WebSocketFalso([])
+
+    resultado = asyncio.run(comprobar_destinatario(
+        websocket,
+        "No te hablaba, era con María",
+        "followup",
+    ))
+
+    assert resultado.dirigida is False
+    assert resultado.motivo == "other_person"
+    assert websocket.enviados == []
+
+
 def test_recibir_respuesta_publica_estados_de_herramienta() -> None:
     websocket = WebSocketFalso(
         [
@@ -171,6 +203,13 @@ def test_seguimiento_predeterminado_ofrece_cinco_turnos_y_ocho_segundos() -> Non
     assert opciones.turnos_seguimiento == 5
     assert opciones.espera_seguimiento == pytest.approx(8.0)
     assert opciones.retardo_eco == 0
+    assert opciones.interrumpir_con_voz is True
+
+
+def test_interrupcion_por_voz_solo_se_desactiva_expresamente() -> None:
+    opciones = crear_argumentos().parse_args(["--sin-interrumpir-con-voz"])
+
+    assert opciones.interrumpir_con_voz is False
 
 
 def test_activacion_confirmada_no_necesita_clasificacion() -> None:

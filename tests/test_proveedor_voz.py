@@ -1,4 +1,7 @@
+import asyncio
+import base64
 import json
+from queue import Queue
 import wave
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,10 +11,12 @@ import yaml
 
 from voice.hablar import InformeSintesis
 from voice.proveedor_voz import (
+    BloquePCM,
     ConfiguracionVoz,
     SintetizadorConRespaldo,
     cargar_configuracion_voz,
     normalizar_direccion_voz,
+    motivo_respaldo_voz,
     registrar_uso_voz,
     preparar_texto_expresivo,
     sintetizar_elevenlabs,
@@ -35,6 +40,179 @@ def configuracion_prueba() -> ConfiguracionVoz:
     )
 
 
+def test_configuracion_real_activa_v4_turbo() -> None:
+    configuracion = cargar_configuracion_voz()
+
+    assert configuracion.modelo == "eleven_v4_turbo"
+
+
+class WebSocketStreamingFalso:
+    def __init__(self, mensajes):
+        self.mensajes = list(mensajes)
+        self.enviados = []
+        self.cerrado = False
+
+    async def send(self, mensaje):
+        self.enviados.append(json.loads(mensaje))
+
+    async def recv(self):
+        return json.dumps(self.mensajes.pop(0))
+
+    async def close(self):
+        self.cerrado = True
+
+
+def test_streaming_elevenlabs_entrega_pcm_y_frontera(tmp_path: Path) -> None:
+    pcm = b"\x01\x00" * 160
+    websocket = WebSocketStreamingFalso([
+        {"audio": base64.b64encode(pcm).decode("ascii")},
+        {"is_final_audio_for_turn": True},
+    ])
+    registros = []
+    sintetizador = SintetizadorConRespaldo(
+        configuracion_prueba(),
+        "sk_prueba",
+        object(),
+        object(),
+        registrador=lambda *args, **kwargs: registros.append((args, kwargs)),
+    )
+
+    async def ejecutar():
+        textos = asyncio.Queue()
+        audios = Queue()
+        await textos.put(("Hola, Jhony.", 13, "warm, attentive"))
+        await textos.put(None)
+
+        async def conectar(uri, **opciones):
+            assert uri.startswith("wss://api.elevenlabs.io/")
+            assert "output_format=pcm_16000" in uri
+            assert opciones["max_size"] is None
+            return websocket
+
+        await sintetizador.producir_streaming(
+            textos,
+            audios,
+            tmp_path / "respuesta.wav",
+            conectar=conectar,
+        )
+        return [audios.get(), audios.get(), audios.get()]
+
+    bloques = asyncio.run(ejecutar())
+
+    assert bloques == [BloquePCM(pcm), BloquePCM(b"", 13, True), None]
+    assert websocket.enviados[1]["flush"] is True
+    assert websocket.enviados[1]["inputs"][0]["new_turn"] is True
+    assert websocket.cerrado is True
+    assert registros[0][0][1:3] == ("elevenlabs", "ok")
+
+
+def test_streaming_continuo_usa_un_solo_turno(tmp_path: Path) -> None:
+    pcm = b"\x01\x00" * 160
+    websocket = WebSocketStreamingFalso([
+        {"audio": base64.b64encode(pcm).decode("ascii")},
+        {"is_final": True},
+    ])
+    sintetizador = SintetizadorConRespaldo(
+        configuracion_prueba(),
+        "sk_prueba",
+        object(),
+        object(),
+        registrador=lambda *_args, **_kwargs: None,
+    )
+
+    async def ejecutar():
+        textos = asyncio.Queue()
+        audios = Queue()
+        await textos.put(("Granada, alberga la Alhambra.", 30, None))
+        await textos.put(("Tiene una gran historia.", 54, None))
+        await textos.put(None)
+
+        async def conectar(*_args, **_kwargs):
+            return websocket
+
+        await sintetizador.producir_streaming(
+            textos,
+            audios,
+            tmp_path / "respuesta.wav",
+            conectar=conectar,
+            turno_continuo=True,
+        )
+        return [audios.get(), audios.get(), audios.get()]
+
+    bloques = asyncio.run(ejecutar())
+    entradas = [mensaje for mensaje in websocket.enviados if "inputs" in mensaje]
+
+    assert len(entradas) == 2
+    assert all(
+        entrada["inputs"][0]["new_turn"] is False for entrada in entradas
+    )
+    assert entradas[0]["flush"] is True
+    assert "flush" not in entradas[1]
+    assert websocket.enviados[-1] == {"close_socket": True}
+    assert entradas[1]["inputs"][0]["text"] == "Tiene una gran historia."
+    assert bloques == [BloquePCM(pcm), BloquePCM(b"", 54, True), None]
+
+
+def test_streaming_cambia_a_piper_si_no_conecta(tmp_path: Path) -> None:
+    registros = []
+
+    def piper(_texto, _voz, _configuracion, salida):
+        with wave.open(str(salida), "wb") as archivo:
+            archivo.setnchannels(1)
+            archivo.setsampwidth(2)
+            archivo.setframerate(16000)
+            archivo.writeframes(b"\x02\x00" * 160)
+        return informe_falso(salida)
+
+    sintetizador = SintetizadorConRespaldo(
+        configuracion_prueba(),
+        "sk_prueba",
+        object(),
+        object(),
+        sintetizador_local=piper,
+        registrador=lambda *args, **kwargs: registros.append((args, kwargs)),
+    )
+
+    async def ejecutar():
+        textos = asyncio.Queue()
+        audios = Queue()
+        await textos.put(("Respuesta.", 10, None))
+        await textos.put(None)
+
+        async def conectar(*_args, **_kwargs):
+            raise OSError("sin red")
+
+        await sintetizador.producir_streaming(
+            textos,
+            audios,
+            tmp_path / "respuesta.wav",
+            conectar=conectar,
+        )
+        return [audios.get() for _ in range(5)]
+
+    bloques = asyncio.run(ejecutar())
+
+    assert bloques[0].datos == b"\x02\x00" * 160
+    assert bloques[1] == BloquePCM(b"", None, True)
+    assert bloques[2].datos == b"\x02\x00" * 160
+    assert bloques[3] == BloquePCM(b"", 10, True)
+    assert bloques[4] is None
+    assert registros[0][0][1:3] == ("elevenlabs", "error")
+    assert registros[1][0][1:3] == ("piper", "ok")
+
+
+@pytest.mark.parametrize(
+    ("error", "motivo"),
+    [
+        ("quota_exceeded", "creditos"),
+        ("insufficient credits", "creditos"),
+        ("connection closed", "fallo"),
+    ],
+)
+def test_clasifica_el_motivo_del_respaldo(error: str, motivo: str) -> None:
+    assert motivo_respaldo_voz(error) == motivo
+
+
 class RespuestaFalsa:
     def __init__(self, audio: bytes) -> None:
         self.audio = audio
@@ -51,7 +229,7 @@ def informe_falso(ruta: Path) -> InformeSintesis:
     return InformeSintesis(ruta, 0.1, 0.02, 22050, 1, 16)
 
 
-def test_elevenlabs_envia_flash_y_crea_wav_pcm16(tmp_path: Path) -> None:
+def test_elevenlabs_envia_modelo_y_crea_wav_pcm16(tmp_path: Path) -> None:
     llamadas = []
     respuesta = RespuestaFalsa(b"\x01\x00" * 2205)
 
@@ -212,16 +390,22 @@ def test_direccion_invalida_vuelve_a_interpretacion_neutra(
     direccion: str,
 ) -> None:
     assert normalizar_direccion_voz(direccion) == (
-        "warm, natural, conversational"
+        "neutral, natural, understated"
     )
 
 
 def test_texto_expresivo_neutraliza_etiquetas_no_controladas() -> None:
     preparado = preparar_texto_expresivo("[shouts] Todo está bien.")
 
-    assert preparado.startswith("[warm, natural, conversational]")
+    assert preparado.startswith("[neutral, natural, understated]")
     assert "[shouts]" not in preparado
     assert "(shouts) Todo está bien." in preparado
+
+
+def test_texto_expresivo_suaviza_comas_solo_para_la_voz() -> None:
+    preparado = preparar_texto_expresivo("Claro, Jhony, lo reviso.")
+
+    assert preparado.endswith("Claro Jhony lo reviso.")
 
 
 def test_configuracion_rechaza_otro_modelo(tmp_path: Path) -> None:
@@ -246,6 +430,6 @@ def test_configuracion_rechaza_otro_modelo(tmp_path: Path) -> None:
     ruta = tmp_path / "config.yaml"
     ruta.write_text(yaml.safe_dump(datos), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="eleven_v4"):
+    with pytest.raises(ValueError, match="voz expresiva"):
         cargar_configuracion_voz(ruta)
     normalizar_direccion_voz,

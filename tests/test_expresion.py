@@ -1,4 +1,10 @@
-from core.expresion import ParserExpresionVoz
+from core.expresion import INSTRUCCIONES_VOZ, ParserExpresionVoz
+
+
+def test_la_expresion_es_excepcional_y_contenida() -> None:
+    assert "En respuestas\ncotidianas no añadas ninguna marca" in INSTRUCCIONES_VOZ
+    assert "La intensidad será sutil por defecto" in INSTRUCCIONES_VOZ
+    assert "evita dramatizar, teatralizar" in INSTRUCCIONES_VOZ
 
 
 def test_parser_separa_expresiones_abiertas_del_texto_visible() -> None:

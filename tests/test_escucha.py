@@ -1,5 +1,6 @@
 from pathlib import Path
 from threading import Event
+import wave
 
 import numpy as np
 import pytest
@@ -113,8 +114,38 @@ def test_espera_la_activacion_y_captura_la_frase(tmp_path: Path) -> None:
     assert activaciones == [resultado.activacion]
     assert resultado.activacion.puntuacion == pytest.approx(0.9)
     assert resultado.informe.frecuencia_hz == 16000
-    assert 0.6 <= resultado.informe.duracion_segundos <= 0.9
+    assert 0.9 <= resultado.informe.duracion_segundos <= 1.1
     assert resultado.desbordamientos == 0
+
+
+def test_conserva_audio_oido_mientras_confirma_astro(tmp_path: Path) -> None:
+    señal = np.concatenate(
+        (
+            np.full(1280, 1100, dtype=np.int16),
+            np.full(1280, 2200, dtype=np.int16),
+            np.full(1280, 3300, dtype=np.int16),
+            np.full(4096, 4400, dtype=np.int16),
+            np.zeros(16000, dtype=np.int16),
+        )
+    )
+    escucha, _ = crear_escucha(señal, [0.0, 0.0, 0.9])
+    salida = tmp_path / "frase-con-frontera.wav"
+
+    resultado = escucha.esperar_frase(
+        salida,
+        configuracion_prueba(),
+    )
+
+    with wave.open(str(salida), "rb") as archivo:
+        pcm = np.frombuffer(
+            archivo.readframes(archivo.getnframes()),
+            dtype=np.int16,
+        )
+    assert resultado.informe.duracion_segundos > 0.7
+    assert 1100 in pcm
+    assert 2200 in pcm
+    assert 3300 in pcm
+    assert 4400 in pcm
 
 
 def test_no_captura_nada_hasta_que_se_activa(tmp_path: Path) -> None:
@@ -135,8 +166,11 @@ def test_rechaza_silencio_despues_de_activarse(tmp_path: Path) -> None:
     )
     escucha, _ = crear_escucha(señal, [0.0, 0.0, 0.9])
 
+    salida = tmp_path / "frase.wav"
     with pytest.raises(ValueError, match="No se detectó voz"):
-        escucha.esperar_frase(tmp_path / "frase.wav", configuracion_prueba())
+        escucha.esperar_frase(salida, configuracion_prueba())
+
+    assert not salida.exists()
 
 
 def test_se_puede_cancelar_la_espera(tmp_path: Path) -> None:
@@ -165,7 +199,7 @@ def test_limita_la_duracion_maxima(tmp_path: Path) -> None:
         ),
     )
 
-    assert resultado.informe.duracion_segundos == pytest.approx(1.0, abs=0.05)
+    assert resultado.informe.duracion_segundos == pytest.approx(1.24, abs=0.05)
 
 
 def test_captura_un_seguimiento_sin_otra_activacion(tmp_path: Path) -> None:
@@ -185,6 +219,27 @@ def test_captura_un_seguimiento_sin_otra_activacion(tmp_path: Path) -> None:
     assert resultado.informe.frecuencia_hz == 16000
     assert 0.6 <= resultado.informe.duracion_segundos <= 0.9
     assert resultado.desbordamientos == 0
+
+
+def test_continua_una_interrupcion_sin_perder_su_inicio(tmp_path: Path) -> None:
+    inicio = np.full(3200, 2500, dtype=np.int16).tobytes()
+    escucha, _ = crear_escucha(np.zeros(16000, dtype=np.int16), [])
+    salida = tmp_path / "interrupcion.wav"
+
+    resultado = escucha.esperar_seguimiento(
+        salida,
+        configuracion_prueba(),
+        audio_inicial=inicio,
+        voz_inicial_confirmada=True,
+    )
+
+    with wave.open(str(salida), "rb") as archivo:
+        pcm = np.frombuffer(
+            archivo.readframes(archivo.getnframes()),
+            dtype=np.int16,
+        )
+    assert resultado.informe.frecuencia_hz == 16000
+    assert np.all(pcm[:3200] == 2500)
 
 
 def test_seguimiento_sin_voz_caduca_y_no_guarda_audio(

@@ -136,6 +136,7 @@ def reproducir_wav(
     microfono: int | None = None,
     detector_eco: Any | None = None,
     al_detectar: Callable[[], Any] | None = None,
+    al_primer_audio: Callable[[], Any] | None = None,
 ) -> bool:
     with wave.open(str(ruta), "rb") as archivo:
         if archivo.getsampwidth() != 2:
@@ -174,6 +175,7 @@ def reproducir_wav(
             detector_eco,
             detener,
             al_detectar,
+            al_primer_audio,
             modulo_audio=audio,
         )
 
@@ -184,6 +186,8 @@ def reproducir_wav(
         dtype="int16",
     ) as flujo:
         if detener is None:
+            if al_primer_audio is not None:
+                al_primer_audio()
             desbordado = flujo.write(datos)
         else:
             desbordado = False
@@ -199,6 +203,8 @@ def reproducir_wav(
                         registrar()
                     break
                 bloque = datos[inicio:inicio + tamano]
+                if inicio == 0 and al_primer_audio is not None:
+                    al_primer_audio()
                 desbordado |= flujo.write(bloque)
     return bool(desbordado)
 

@@ -149,3 +149,41 @@ def test_un_error_de_audio_deja_el_indicador_visual_activo() -> None:
 
     assert sum("AVISO" in mensaje for mensaje in mensajes) == 1
     assert mensajes[-1] == "[ESCUCHANDO] Habla ahora"
+
+
+def test_el_gancho_recibe_cada_cambio_con_su_texto() -> None:
+    recibidos = []
+    indicador = IndicadorEstados(
+        sonidos=False,
+        salida=lambda _: None,
+        al_cambiar=lambda estado, texto: recibidos.append((estado, texto)),
+    )
+
+    indicador.cambiar(EstadoVoz.DORMIDO)
+    indicador.cambiar(EstadoVoz.ESCUCHANDO, "Habla ahora")
+    indicador.cambiar(EstadoVoz.ESCUCHANDO, "repetido")  # sin cambio: no se notifica
+
+    assert recibidos == [
+        (EstadoVoz.DORMIDO, "Esperando «Astro»"),
+        (EstadoVoz.ESCUCHANDO, "Habla ahora"),
+    ]
+
+
+def test_un_gancho_que_falla_no_derriba_la_conversacion() -> None:
+    llamadas = []
+
+    def gancho_roto(estado, texto):
+        llamadas.append(estado)
+        raise RuntimeError("fallo del receptor")
+
+    indicador = IndicadorEstados(
+        sonidos=False,
+        salida=lambda _: None,
+        al_cambiar=gancho_roto,
+    )
+
+    assert indicador.cambiar(EstadoVoz.DORMIDO) is True
+    assert indicador.cambiar(EstadoVoz.ESCUCHANDO) is True
+    assert indicador.estado is EstadoVoz.ESCUCHANDO
+    assert llamadas == [EstadoVoz.DORMIDO]  # se desactivó tras el primer fallo
+    assert indicador.al_cambiar is None

@@ -7,6 +7,7 @@ class ProcesadorFalso:
     def __init__(self):
         self.llamadas = []
         self.reinicios = 0
+        self.stream_delay_ms = 0
 
     def process(self, microfono, referencia):
         self.llamadas.append((microfono.copy(), referencia.copy()))
@@ -29,6 +30,16 @@ def test_cancelador_aisla_el_procesador_nativo() -> None:
     assert np.array_equal(procesador.llamadas[0][0], microfono)
     assert np.array_equal(procesador.llamadas[0][1], referencia)
     assert procesador.reinicios == 1
+
+
+def test_cancelador_limita_el_retardo_al_rango_de_webrtc() -> None:
+    procesador = ProcesadorFalso()
+    cancelador = CanceladorEco(retardo_ms=40, procesador=procesador)
+
+    assert procesador.stream_delay_ms == 40
+    assert cancelador.actualizar_retardo(-25) == 0
+    assert cancelador.actualizar_retardo(725) == 500
+    assert procesador.stream_delay_ms == 500
 
 
 def test_webrtc_atenua_un_eco_sintetico() -> None:

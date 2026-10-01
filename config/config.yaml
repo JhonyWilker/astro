@@ -2,7 +2,6 @@ proveedor: openai
 modelo: gpt-6-astra
 idioma: español de España
 zona_horaria: Europe/Madrid
-nivel_servicio: default
 razonamiento: low
 
 proveedores:
@@ -11,16 +10,31 @@ proveedores:
     base_url: https://api.openai.com/v1
     clave_entorno: OPENAI_API_KEY
     modelo: gpt-6-astra
+    nivel_servicio: fast
   openrouter:
     nombre_visible: OpenRouter
     base_url: https://openrouter.ai/api/v1
     clave_entorno: OPENROUTER_API_KEY
     modelo: openai/gpt-6-astra
+    nivel_servicio: default
 
 ia:
   respaldo: openrouter
   cambio_automatico: true
   reintento_principal_segundos: 120
+
+conversacion_rapida:
+  habilitada: true
+  proveedor: openai
+  modelo: gpt-6-luna
+  nivel_servicio: fast
+  razonamiento: none
+  max_caracteres: 240
+  precios_usd_por_millon:
+    entrada: 0.20
+    entrada_cache: 0.02
+    escritura_cache: 0.25
+    salida: 1.00
 
 api:
   timeout_segundos: 30
@@ -37,9 +51,11 @@ voz:
     base_url: https://api.elevenlabs.io
     clave_entorno: ELEVENLABS_API_KEY
     voice_id: RRpWawPJ96ird1KfHTVi
-    modelo: eleven_v4
+    modelo: eleven_v4_turbo
     formato: pcm_22050
     frecuencia_hz: 22050
+    formato_streaming: pcm_16000
+    frecuencia_streaming_hz: 16000
     timeout_segundos: 8
     estabilidad: 1.0
     similitud: 0.84

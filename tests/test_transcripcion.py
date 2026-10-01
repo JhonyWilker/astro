@@ -20,8 +20,20 @@ class ModeloFalso:
         }
         segmentos = iter(
             [
-                SimpleNamespace(start=0.0, end=1.2, text=" Hola "),
-                SimpleNamespace(start=1.2, end=2.4, text="Jhony."),
+                SimpleNamespace(
+                    start=0.0,
+                    end=1.2,
+                    text=" Hola ",
+                    no_speech_prob=0.1,
+                    avg_logprob=-0.2,
+                ),
+                SimpleNamespace(
+                    start=1.2,
+                    end=2.4,
+                    text="Jhony.",
+                    no_speech_prob=0.2,
+                    avg_logprob=-0.3,
+                ),
             ]
         )
         informacion = SimpleNamespace(
@@ -49,6 +61,8 @@ def test_transcribir_audio_reune_segmentos(tmp_path: Path) -> None:
     assert resultado.duracion_audio == pytest.approx(2.4)
     assert resultado.duracion_proceso == pytest.approx(0.5)
     assert len(resultado.segmentos) == 2
+    assert resultado.segmentos[0].probabilidad_silencio == pytest.approx(0.1)
+    assert resultado.segmentos[0].logprob_promedio == pytest.approx(-0.2)
 
 
 def test_transcribir_audio_rechaza_archivo_inexistente(
@@ -82,6 +96,19 @@ def test_cargar_modelo_configura_cpu_int8() -> None:
             },
         )
     ]
+
+
+def test_cargar_modelo_configura_cuda_int8_float16() -> None:
+    llamadas = []
+
+    def fabrica(nombre, **opciones):
+        llamadas.append((nombre, opciones))
+        return object()
+
+    cargar_modelo("base", fabrica=fabrica, dispositivo="cuda")
+
+    assert llamadas[0][1]["device"] == "cuda"
+    assert llamadas[0][1]["compute_type"] == "int8_float16"
 
 
 def test_formatear_segmento_es_compatible_con_consola() -> None:

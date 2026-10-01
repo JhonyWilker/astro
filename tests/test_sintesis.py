@@ -146,9 +146,9 @@ def test_reproducir_wav_usa_duplex_a_16_khz(tmp_path: Path, monkeypatch) -> None
     llamadas = []
 
     def duplex(muestras, microfono, altavoz, detector, control, al_detectar,
-               *, modulo_audio):
+               al_primer_audio, *, modulo_audio):
         llamadas.append((muestras, microfono, altavoz, detector, control,
-                         al_detectar, modulo_audio))
+                         al_detectar, al_primer_audio, modulo_audio))
         return False
 
     monkeypatch.setattr("voice.duplex.reproducir_duplex", duplex)
@@ -174,7 +174,8 @@ def test_reproducir_wav_usa_duplex_a_16_khz(tmp_path: Path, monkeypatch) -> None
     assert llamada[3] is detector
     assert llamada[4] is control
     assert llamada[5] is aviso
-    assert llamada[6] is audio
+    assert llamada[6] is None
+    assert llamada[7] is audio
 
 
 def test_sintetizar_rechaza_texto_vacio(tmp_path: Path) -> None:

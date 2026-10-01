@@ -3,9 +3,12 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from queue import Queue
+from threading import Event
 from time import perf_counter
 from typing import Any
 
+from voice.duplex import reproducir_pcm_streaming
 from voice.hablar import reproducir_wav, sintetizar
 
 
@@ -98,7 +101,64 @@ async def reproducir_cola_streaming(
     microfono: int | None = None,
     detector_eco: Any | None = None,
     al_detectar: Callable[[], Any] | None = None,
+    reproductor_pcm: Callable[..., tuple[int, int]] = reproducir_pcm_streaming,
+    turno_continuo: bool = False,
 ) -> ResultadoStreaming:
+    if getattr(sintetizador, "streaming_disponible", False):
+        cola_audio_pcm: Queue[Any] = Queue()
+        control = detener if detener is not None else Event()
+        latencia: float | None = None
+        bucle = asyncio.get_running_loop()
+
+        def marcar_primer_audio() -> None:
+            nonlocal latencia
+            if latencia is None:
+                latencia = reloj() - inicio
+                if al_empezar is not None:
+                    al_empezar()
+
+        def confirmar_desde_hilo(cantidad: int) -> None:
+            if confirmar is None:
+                return
+            futuro = asyncio.run_coroutine_threadsafe(confirmar(cantidad), bucle)
+            futuro.result(timeout=5.0)
+
+        opciones_productor = (
+            {"turno_continuo": True} if turno_continuo else {}
+        )
+        productor = asyncio.create_task(sintetizador.producir_streaming(
+            cola_texto,
+            cola_audio_pcm,
+            ruta_base,
+            **opciones_productor,
+        ))
+        consumidor = asyncio.create_task(asyncio.to_thread(
+            reproductor_pcm,
+            cola_audio_pcm,
+            sintetizador.configuracion.frecuencia_streaming_hz,
+            microfono,
+            dispositivo,
+            control,
+            marcar_primer_audio,
+            confirmar_desde_hilo,
+            detector_eco,
+            al_detectar,
+        ))
+        resultados = await asyncio.gather(
+            productor,
+            consumidor,
+            return_exceptions=True,
+        )
+        for resultado in resultados:
+            if isinstance(resultado, BaseException):
+                raise resultado
+        fragmentos, cortes = resultados[1]
+        if latencia is None:
+            if control.is_set():
+                return ResultadoStreaming(0, 0.0, cortes)
+            raise RuntimeError("No se generó audio incremental para la respuesta")
+        return ResultadoStreaming(fragmentos, latencia, cortes)
+
     cola_audio: asyncio.Queue[Path | None] = asyncio.Queue()
 
     async def producir_audio() -> None:
@@ -144,11 +204,15 @@ async def reproducir_cola_streaming(
             ruta, confirmado = item
             if detener is not None and detener.is_set():
                 continue
-            if latencia is None:
-                latencia = reloj() - inicio
-                if al_empezar is not None:
-                    al_empezar()
+            def marcar_primer_audio() -> None:
+                nonlocal latencia
+                if latencia is None:
+                    latencia = reloj() - inicio
+                    if al_empezar is not None:
+                        al_empezar()
+
             opciones = {"detener": detener} if detener is not None else {}
+            opciones["al_primer_audio"] = marcar_primer_audio
             if detector_eco is not None:
                 opciones.update({
                     "microfono": microfono,

@@ -1,0 +1,205 @@
+"""Puente local de ASTRO: publica el estado de la voz por WebSocket en 127.0.0.1.
+
+El cliente de voz es el servidor; la ventana de escritorio u otro proceso se conecta
+cuando quiere. Si nadie escucha, o un receptor falla, la voz no se entera.
+"""
+import asyncio
+import json
+import os
+import secrets
+import threading
+import time
+from hmac import compare_digest
+from http import HTTPStatus
+from pathlib import Path
+
+import websockets.asyncio.server as ws_server
+from websockets.exceptions import ConnectionClosed
+
+VERSION_PROTOCOLO = 1
+RUTA_INFO = Path(__file__).resolve().parents[1] / "data" / "puente.json"
+ORIGENES_PERMITIDOS = frozenset({"https://astro-vps.tailbee6db.ts.net"})
+HOSTS_PERMITIDOS = frozenset({"127.0.0.1", "localhost"})
+MAXIMO_CLIENTES = 4
+ESPERA_AUTENTICACION = 3.0
+ESPERA_ENVIO = 1.0
+MENSAJES_EN_COLA = 100
+TAMANO_MAXIMO_ENTRADA = 4096
+
+
+class PuenteLocal:
+    def __init__(
+        self,
+        ruta_info=RUTA_INFO,
+        origenes=ORIGENES_PERMITIDOS,
+        maximo_clientes=MAXIMO_CLIENTES,
+        espera_autenticacion=ESPERA_AUTENTICACION,
+    ):
+        self.ruta_info = Path(ruta_info)
+        self.origenes = frozenset(origenes)
+        self.maximo_clientes = maximo_clientes
+        self.espera_autenticacion = espera_autenticacion
+        self.token = secrets.token_urlsafe(32)
+        self.puerto = None
+        self._bucle = None
+        self._parar = None
+        self._hilo = None
+        self._listo = threading.Event()
+        self._clientes = {}
+        self._ultimo_estado = None
+
+    # --- Ciclo de vida (se llama desde el hilo de la voz) ---
+
+    def iniciar(self):
+        """Arranca el servidor. Devuelve False, sin lanzar nada, si no pudo."""
+        self._hilo = threading.Thread(target=self._ejecutar, name="puente-local", daemon=True)
+        self._hilo.start()
+        self._listo.wait(timeout=5)
+        return self.puerto is not None
+
+    def detener(self):
+        try:
+            if self._bucle is not None and self._parar is not None:
+                self._bucle.call_soon_threadsafe(self._parar.set)
+            if self._hilo is not None:
+                self._hilo.join(timeout=3)
+        except Exception:
+            pass
+        self._borrar_info()
+
+    def _ejecutar(self):
+        try:
+            asyncio.run(self._principal())
+        except Exception:
+            self.puerto = None
+        finally:
+            self._listo.set()
+
+    async def _principal(self):
+        self._bucle = asyncio.get_running_loop()
+        self._parar = asyncio.Event()
+        async with ws_server.serve(
+            self._atender,
+            "127.0.0.1",
+            0,
+            process_request=self._comprobar_origen,
+            max_size=TAMANO_MAXIMO_ENTRADA,
+        ) as servidor:
+            self.puerto = servidor.sockets[0].getsockname()[1]
+            self._escribir_info()
+            self._listo.set()
+            await self._parar.wait()
+
+    # --- Publicación (segura entre hilos, nunca lanza ni espera) ---
+
+    def publicar(self, tipo, **datos):
+        try:
+            if self._bucle is None:
+                return
+            mensaje = {
+                "v": VERSION_PROTOCOLO,
+                "type": tipo,
+                "ts": round(time.time() * 1000),
+                **datos,
+            }
+            texto = json.dumps(mensaje, ensure_ascii=False)
+            self._bucle.call_soon_threadsafe(self._repartir, tipo, mensaje, texto)
+        except Exception:
+            pass
+
+    def publicar_estado(self, estado, detalle):
+        """Gancho para IndicadorEstados.al_cambiar."""
+        self.publicar("state", state=getattr(estado, "value", str(estado)), detail=detalle)
+
+    def _repartir(self, tipo, mensaje, texto):
+        if tipo == "state":
+            self._ultimo_estado = mensaje
+        for conexion, cola in list(self._clientes.items()):
+            try:
+                cola.put_nowait(texto)
+            except asyncio.QueueFull:
+                self._clientes.pop(conexion, None)
+                asyncio.ensure_future(conexion.close(1013, "Cliente demasiado lento"))
+
+    # --- Conexiones ---
+
+    def _comprobar_origen(self, conexion, peticion):
+        origen = peticion.headers.get("Origin")
+        host = (peticion.headers.get("Host") or "").rsplit(":", 1)[0]
+        if (origen is not None and origen not in self.origenes) or host not in HOSTS_PERMITIDOS:
+            return conexion.respond(HTTPStatus.FORBIDDEN, "No permitido\n")
+        return None
+
+    async def _atender(self, conexion):
+        if len(self._clientes) >= self.maximo_clientes:
+            await conexion.close(1008, "Demasiados clientes")
+            return
+        if not await self._autenticar(conexion):
+            await conexion.close(1008, "No autorizado")
+            return
+        ultimo = self._ultimo_estado or {}
+        cola = asyncio.Queue(maxsize=MENSAJES_EN_COLA)
+        cola.put_nowait(json.dumps({
+            "v": VERSION_PROTOCOLO,
+            "type": "hello",
+            "state": ultimo.get("state"),
+            "detail": ultimo.get("detail"),
+        }, ensure_ascii=False))
+        self._clientes[conexion] = cola
+        escritor = asyncio.create_task(self._escribir(conexion, cola))
+        try:
+            async for _ in conexion:
+                pass  # el receptor no envía nada más; se ignora
+        except ConnectionClosed:
+            pass
+        finally:
+            self._clientes.pop(conexion, None)
+            escritor.cancel()
+
+    async def _autenticar(self, conexion):
+        try:
+            primero = await asyncio.wait_for(conexion.recv(), self.espera_autenticacion)
+            datos = json.loads(primero)
+            token = datos.get("token") if isinstance(datos, dict) else None
+            return (
+                datos.get("type") == "auth"
+                and isinstance(token, str)
+                and compare_digest(token.encode(), self.token.encode())
+            )
+        except (asyncio.TimeoutError, ValueError, TypeError, ConnectionClosed):
+            return False
+
+    async def _escribir(self, conexion, cola):
+        try:
+            while True:
+                texto = await cola.get()
+                await asyncio.wait_for(conexion.send(texto), ESPERA_ENVIO)
+        except Exception:
+            self._clientes.pop(conexion, None)
+            await conexion.close()
+
+    # --- Archivo con puerto y token (solo para procesos locales del usuario) ---
+
+    def _escribir_info(self):
+        self.ruta_info.parent.mkdir(parents=True, exist_ok=True)
+        contenido = {
+            "v": VERSION_PROTOCOLO,
+            "port": self.puerto,
+            "token": self.token,
+            "pid": os.getpid(),
+        }
+        temporal = self.ruta_info.with_suffix(".tmp")
+        temporal.write_text(json.dumps(contenido), encoding="utf-8")
+        try:
+            os.chmod(temporal, 0o600)
+        except OSError:
+            pass
+        os.replace(temporal, self.ruta_info)
+
+    def _borrar_info(self):
+        try:
+            datos = json.loads(self.ruta_info.read_text(encoding="utf-8"))
+            if datos.get("pid") == os.getpid():
+                self.ruta_info.unlink()
+        except (OSError, ValueError):
+            pass

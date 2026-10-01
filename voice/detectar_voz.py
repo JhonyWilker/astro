@@ -27,7 +27,7 @@ VENTANA_INICIO = 5
 class ConfiguracionDeteccion:
     espera_maxima: float = 5.0
     duracion_maxima: float = 30.0
-    silencio_final: float = 1.0
+    silencio_final: float = 0.5
     pregrabacion: float = 0.3
 
 

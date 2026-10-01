@@ -102,6 +102,7 @@ class IndicadorEstados:
         sonidos: bool = True,
         salida: Callable[[str], None] = print,
         reproductor: Callable[[EstadoVoz, int | None], None] = reproducir_senal,
+        al_cambiar: Callable[[EstadoVoz, str], None] | None = None,
     ) -> None:
         self.estado: EstadoVoz | None = None
         self._dispositivo = dispositivo
@@ -109,11 +110,14 @@ class IndicadorEstados:
         self._salida = salida
         self._reproductor = reproductor
         self._bloqueo = Lock()
+        self.al_cambiar = al_cambiar
 
     def cambiar(
         self,
         nuevo: EstadoVoz,
         detalle: str | None = None,
+        *,
+        sonido: bool = True,
     ) -> bool:
         with self._bloqueo:
             if nuevo == self.estado:
@@ -131,7 +135,12 @@ class IndicadorEstados:
             self.estado = nuevo
             texto = detalle or ETIQUETAS[nuevo]
             self._salida(f"[{nuevo.value.upper()}] {texto}")
-            if self._sonidos:
+            if self.al_cambiar is not None:
+                try:
+                    self.al_cambiar(nuevo, texto)
+                except Exception:
+                    self.al_cambiar = None  # un gancho roto nunca derriba la voz
+            if self._sonidos and sonido:
                 try:
                     self._reproductor(nuevo, self._dispositivo)
                 except Exception as error:

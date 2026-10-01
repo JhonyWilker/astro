@@ -23,6 +23,7 @@ from core.errores import (
     guardar_registro_error,
 )
 from core.direccion import ResultadoDireccion, clasificar_con_rutas
+from core.enrutador_modelo import usar_modelo_rapido
 from tools.registro import RegistroHerramientas
 from core.turno import ControlTurno, TurnoCancelado
 
@@ -48,19 +49,46 @@ class NucleoASTRO:
             registro=self.registro.filtrar({"calcular", "obtener_fecha_hora"}),
         )
 
-    def configuracion_para(self, proveedor: str) -> Configuracion:
+    def configuracion_para(
+        self,
+        proveedor: str,
+        conversacion_rapida: bool = False,
+    ) -> Configuracion:
         ajustes = self.ajustes_ia.obtener()
-        return replace(
+        niveles = self.configuracion.niveles_servicio_por_proveedor or {}
+        configuracion = replace(
             self.configuracion,
             proveedor=self.configuracion.proveedores[proveedor],
             modelo=ajustes.modelos[proveedor],
+            nivel_servicio=niveles.get(proveedor, "default"),
         )
+        rapida = self.configuracion.conversacion_rapida
+        if (
+            conversacion_rapida
+            and rapida is not None
+            and rapida.habilitada
+            and proveedor == rapida.proveedor
+        ):
+            return replace(
+                configuracion,
+                modelo=rapida.modelo,
+                nivel_servicio=rapida.nivel_servicio,
+                esfuerzo_razonamiento=rapida.esfuerzo_razonamiento,
+                tarifas=rapida.tarifas,
+            )
+        return configuracion
 
-    def rutas_para_turno(self) -> tuple[RutaIA, ...]:
+    def rutas_para_turno(
+        self,
+        conversacion_rapida: bool = False,
+    ) -> tuple[RutaIA, ...]:
         rutas: list[RutaIA] = []
         ultimo_error: RuntimeError | None = None
         for proveedor in self.ajustes_ia.rutas_para_turno():
-            configuracion = self.configuracion_para(proveedor)
+            configuracion = self.configuracion_para(
+                proveedor,
+                conversacion_rapida,
+            )
             cliente = self.clientes.get(proveedor)
             if cliente is None:
                 try:
@@ -140,13 +168,38 @@ class SesionASTRO:
         if not pregunta:
             raise ValueError("La pregunta no puede estar vacía")
 
+        pregunta_anterior = next(
+            (
+                mensaje["content"]
+                for mensaje in reversed(self.historial)
+                if mensaje["role"] == "user"
+            ),
+            "",
+        )
+        rapida = self.nucleo.configuracion.conversacion_rapida
+        usar_rapida = bool(
+            rapida
+            and rapida.habilitada
+            and usar_modelo_rapido(
+                pregunta,
+                rapida.max_caracteres,
+                self.herramientas_por_turno[-1]
+                if self.herramientas_por_turno
+                else (),
+                pregunta_anterior,
+            )
+        )
+        registro = self.registro or self.nucleo.registro
+        if usar_rapida:
+            registro = registro.filtrar(set())
+
         self.historial.append({"role": "user", "content": pregunta})
         try:
             resultado = responder_con_rutas(
-                self.nucleo.rutas_para_turno(),
+                self.nucleo.rutas_para_turno(usar_rapida),
                 self.historial,
                 self.personalidad or self.nucleo.personalidad,
-                self.registro or self.nucleo.registro,
+                registro,
                 emitir_texto,
                 emitir_cambio,
                 self.nucleo.registrar_fallo,
